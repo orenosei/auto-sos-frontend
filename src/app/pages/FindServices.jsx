@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Search,
@@ -13,11 +13,11 @@ import {
   Loader,
   AlertCircle,
 } from "lucide-react";
-import { getCompanies, getCompanyServices, getNearbyCompanies } from "../api/companies";
+import { getCompanies, getNearbyCompanies } from "../api/companies";
 import { getServices } from "../api/services";
 import { toUiCompany, toUiService } from "../api/mappers";
 import { useGPS } from "../hooks/useGPS";
-import { calculateDistance } from "../utils/gpsUtils";
+import { calculateDistance, calculateETA, formatAddress } from "../utils/gpsUtils";
 import ServiceMap from "../components/ServiceMap";
 
 export default function FindServices() {
@@ -32,7 +32,7 @@ export default function FindServices() {
   const [displayAddress, setDisplayAddress] = useState("Đang xác định vị trí...");
   const [loadingNearby, setLoadingNearby] = useState(false);
 
-  const { location, address, loading: gpsLoading, error: gpsError, getCurrentLocation } = useGPS();
+  const { location, address, fullAddress, addressComponents, loading: gpsLoading, error: gpsError, getCurrentLocation } = useGPS();
 
   // Tự động quét vị trí ngay khi vào trang
   useEffect(() => {
@@ -64,16 +64,8 @@ export default function FindServices() {
 
         setServices(svc.map(toUiService));
 
-        const withServices = await Promise.all(
-          comps.map(async (c) => {
-            try {
-              const cs = await getCompanyServices(c.company_id);
-              return toUiCompany(c, cs);
-            } catch {
-              return toUiCompany(c, []);
-            }
-          })
-        );
+        // Backend now returns services bundled per company as `services`.
+        const withServices = comps.map((c) => toUiCompany(c, c.services || []));
 
         if (!cancelled) setCompanies(withServices);
       } catch (e) {
@@ -100,10 +92,12 @@ export default function FindServices() {
   };
 
   useEffect(() => {
-    if (useGPSLocation && address) {
-      setDisplayAddress(address);
+    if (useGPSLocation && fullAddress) {
+      // Format địa chỉ để hiển thị đẹp hơn
+      const formatted = formatAddress(fullAddress, addressComponents);
+      setDisplayAddress(formatted);
     }
-  }, [useGPSLocation, address]);
+  }, [useGPSLocation, fullAddress, addressComponents]);
 
   // Xử lý click trên công ty trong bản đồ
   const handleMapCompanyClick = (company) => {
@@ -121,8 +115,6 @@ export default function FindServices() {
   // Tìm công ty gần nhất khi có vị trí GPS
   useEffect(() => {
     if (location && useGPSLocation) {
-      setDisplayAddress(address || "Vị trí hiện tại");
-      
       let cancelled = false;
 
       (async () => {
@@ -156,9 +148,9 @@ export default function FindServices() {
         cancelled = true;
       };
     }
-  }, [location, useGPSLocation, address, companies.length]);
+  }, [location, useGPSLocation]);
 
-  const serviceOptions = ["Tất cả", ...services.map((s) => s.name)];
+  const serviceOptions = useMemo(() => ["Tất cả", ...services.map((s) => s.name)], [services]);
 
   const getCompanyDistanceKm = (company) => {
     const apiDistance = Number(company.distance);
@@ -172,36 +164,40 @@ export default function FindServices() {
     return calculateDistance(location.latitude, location.longitude, lat, lng);
   };
 
-  const filtered = companies
-    .filter((c) => {
-      const matchSearch =
-        c.name.toLowerCase().includes(searchText.toLowerCase()) ||
-        c.operatingArea.toLowerCase().includes(searchText.toLowerCase());
-      const matchService =
-        selectedService === "Tất cả" ||
-        c.services.some((s) => s.includes(selectedService.split(" ")[0]));
-      return matchSearch && matchService;
-    })
-    .sort((a, b) => {
-      if (sortBy === "distance") {
-        const da = getCompanyDistanceKm(a) ?? 999;
-        const db = getCompanyDistanceKm(b) ?? 999;
-        return da - db;
-      }
-      if (sortBy === "rating") {
-        const ra = Number.isFinite(Number(a.rating)) ? Number(a.rating) : -1;
-        const rb = Number.isFinite(Number(b.rating)) ? Number(b.rating) : -1;
-        return rb - ra;
-      }
-      if (sortBy === "response") {
-        const ta = Number.isFinite(Number(a.responseTime)) ? Number(a.responseTime) : 999;
-        const tb = Number.isFinite(Number(b.responseTime)) ? Number(b.responseTime) : 999;
-        return ta - tb;
-      }
-      return 0;
-    });
+  const filtered = useMemo(() => {
+    const result = companies
+      .filter((c) => {
+        const matchSearch =
+          c.name.toLowerCase().includes(searchText.toLowerCase()) ||
+          c.operatingArea.toLowerCase().includes(searchText.toLowerCase());
+        const matchService =
+          selectedService === "Tất cả" ||
+          c.services.some((s) => s.includes(selectedService.split(" ")[0]));
+        return matchSearch && matchService;
+      })
+      .sort((a, b) => {
+        if (sortBy === "distance") {
+          const da = getCompanyDistanceKm(a) ?? 999;
+          const db = getCompanyDistanceKm(b) ?? 999;
+          return da - db;
+        }
+        if (sortBy === "rating") {
+          const ra = Number.isFinite(Number(a.rating)) ? Number(a.rating) : -1;
+          const rb = Number.isFinite(Number(b.rating)) ? Number(b.rating) : -1;
+          return rb - ra;
+        }
+        if (sortBy === "response") {
+          const ta = Number.isFinite(Number(a.responseTime)) ? Number(a.responseTime) : 999;
+          const tb = Number.isFinite(Number(b.responseTime)) ? Number(b.responseTime) : 999;
+          return ta - tb;
+        }
+        return 0;
+      });
 
-  const mapCompanies = (() => {
+    return result;
+  }, [companies, searchText, selectedService, sortBy, location]);
+
+  const mapCompanies = useMemo(() => {
     if (!(useGPSLocation && location)) return [];
 
     const withCoords = filtered.filter(
@@ -224,7 +220,7 @@ export default function FindServices() {
 
     // Fallback cuối: vẫn hiển thị các công ty có tọa độ để map không rỗng
     return withCoords.slice(0, 20);
-  })();
+  }, [filtered, useGPSLocation, location]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -398,9 +394,11 @@ export default function FindServices() {
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock size={12} className="text-blue-400" />
-                        {Number.isFinite(Number(company.responseTime))
-                          ? `~${Number(company.responseTime)} phút`
-                          : "Chưa có ETA"}
+                        {(() => {
+                          const distance = getCompanyDistanceKm(company);
+                          const eta = Number.isFinite(distance) ? calculateETA(distance) : null;
+                          return eta !== null ? `~${eta} phút` : "Chưa có ETA";
+                        })()}
                       </span>
                       <span className="flex items-center gap-1">
                         <Phone size={12} className="text-green-400" />
@@ -427,6 +425,12 @@ export default function FindServices() {
                     <div className="flex gap-3 mt-4">
                       <Link
                         to="/dashboard"
+                        state={{
+                          preselectedCompanyId: company.id,
+                          preselectedLat: location?.latitude,
+                          preselectedLng: location?.longitude,
+                          preselectedAddress: displayAddress,
+                        }}
                         className="flex-1 text-center bg-linear-to-r from-pink-500 to-pink-400 text-white text-sm font-medium py-2 rounded-xl hover:shadow-md hover:shadow-pink-200 transition-all"
                       >
                         Gửi yêu cầu

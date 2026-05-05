@@ -180,6 +180,69 @@ export async function geocode(address) {
 }
 
 /**
+ * Tính ETA (thời gian ước tính) từ khoảng cách
+ * @param {number} distanceKm - Khoảng cách tính bằng km
+ * @returns {number|null} - Thời gian ước tính tính bằng phút, hoặc null nếu không hợp lệ
+ */
+export function calculateETA(distanceKm) {
+  if (!Number.isFinite(distanceKm) || distanceKm < 0) return null;
+  
+  // Giả sử tốc độ trung bình 35 km/h cho xe cứu hộ
+  const averageSpeed = 35; // km/h
+  const etaMinutes = (distanceKm / averageSpeed) * 60;
+  
+  return Math.round(etaMinutes);
+}
+
+/**
+ * Định dạng địa chỉ từ Nominatim để hiển thị đẹp hơn
+ * Input: "Bach Mai Ward, Hà Nội, 11618, Vietnam"
+ * Output: "Bach Mai, Hà Nội"
+ * @param {string} fullAddress - Địa chỉ đầy đủ từ Nominatim
+ * @param {object} addressComponents - Thành phần địa chỉ từ Nominatim address_details
+ * @returns {string} - Địa chỉ định dạng gọn gàng
+ */
+export function formatAddress(fullAddress, addressComponents) {
+  // Nếu có address_components từ Nominatim, sử dụng nó để trích xuất
+  if (addressComponents) {
+    const village = addressComponents.village || addressComponents.neighbourhood;
+    const ward = addressComponents.suburb || addressComponents.ward;
+    const district = addressComponents.county;
+    const city = addressComponents.city || addressComponents.state;
+    
+    // Ưu tiên thứ tự: village/neighbourhood -> ward/suburb -> city
+    const location = village || ward || district;
+    if (location && city && location !== city) {
+      return `${location}, ${city}`;
+    }
+    if (city) return city;
+  }
+  
+  // Fallback: phân tích chuỗi địa chỉ bằng cách tách dấu phẩy
+  if (typeof fullAddress === 'string') {
+    const parts = fullAddress.split(',').map(p => p.trim()).filter(Boolean);
+    
+    // Lọc ra các phần không phải là postal code hay quốc gia
+    const filtered = parts.filter(p => {
+      // Bỏ qua postal code (toàn số)
+      if (/^\d+$/.test(p)) return false;
+      // Bỏ qua quốc gia
+      if (p === 'Vietnam' || p === 'Việt Nam') return false;
+      return true;
+    });
+    
+    if (filtered.length >= 2) {
+      // Lấy 2 phần cuối (thường là ward + city)
+      return filtered.slice(-2).join(', ');
+    } else if (filtered.length > 0) {
+      return filtered[0];
+    }
+  }
+  
+  return fullAddress || 'Không xác định';
+}
+
+/**
  * Format khoảng cách để hiển thị
  */
 export function formatDistance(km) {

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import {
   Plus,
   Clock,
@@ -23,10 +23,12 @@ import {
   Send,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
-import { getCompanies, getCompanyServices } from "../api/companies";
+import { getCompanies, getCompanyServices, getNearbyCompanies } from "../api/companies";
 import { getServices } from "../api/services";
 import { addRequestService, createRequest, getRequestServices, getRequests } from "../api/requests";
+import { addRequestImage, uploadRequestImageToCloudinary } from "../api/requestImages";
 import { toUiCompany, toUiRequest, toUiService } from "../api/mappers";
+import { reverseGeocode, formatAddress, calculateDistance, calculateETA } from "../utils/gpsUtils";
 
 const statusConfig = {
   pending: { label: "Chờ tiếp nhận", color: "text-yellow-600 bg-yellow-50 border-yellow-200", icon: <Clock size={14} /> },
@@ -45,8 +47,37 @@ const serviceIconMap = {
   "Hỗ trợ tai nạn": <AlertTriangle size={20} className="text-red-500" />,
 };
 
+const SELECTED_COMPANY_STORAGE_KEY = "auto-sos:selected-company-id";
+
 export default function UserDashboard() {
   const { currentUser, isLoggedIn } = useApp();
+  const locationState = useLocation();
+
+  const preselectedCompanyId = useMemo(() => {
+    const fromRoute = locationState.state?.preselectedCompanyId;
+    if (fromRoute != null) return String(fromRoute);
+
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem(SELECTED_COMPANY_STORAGE_KEY) ?? "";
+    }
+
+    return "";
+  }, [locationState.state]);
+
+  const preselectedLat = useMemo(() => {
+    const value = Number(locationState.state?.preselectedLat);
+    return Number.isFinite(value) ? value : undefined;
+  }, [locationState.state]);
+
+  const preselectedLng = useMemo(() => {
+    const value = Number(locationState.state?.preselectedLng);
+    return Number.isFinite(value) ? value : undefined;
+  }, [locationState.state]);
+
+  const preselectedAddress = useMemo(() => {
+    const value = locationState.state?.preselectedAddress;
+    return typeof value === "string" && value.trim() ? value : undefined;
+  }, [locationState.state]);
 
   const userId = useMemo(() => {
     if (!currentUser) return null;
@@ -58,7 +89,7 @@ export default function UserDashboard() {
   const [services, setServices] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [requests, setRequests] = useState([]);
-  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [, setLoadingRequests] = useState(false);
 
   const [activeTab, setActiveTab] = useState("new");
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -69,10 +100,15 @@ export default function UserDashboard() {
     latitude: undefined,
     longitude: undefined,
     step: 1,
-    selectedCompanyId: "",
+    selectedCompanyId: preselectedCompanyId,
+    imageUrls: [],
   });
   const [ratingModal, setRatingModal] = useState({ open: false, requestId: "" });
   const [starValue, setStarValue] = useState(0);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const hasAutoGpsTriedRef = useRef(false);
+  const imageInputRef = useRef(null);
 
   const userRequests = requests;
 
@@ -160,36 +196,197 @@ export default function UserDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, isLoggedIn]);
 
+  useEffect(() => {
+    if (!preselectedCompanyId) return;
+
+    setActiveTab("new");
+    setNewReq((prev) => ({
+      ...prev,
+      selectedCompanyId: preselectedCompanyId,
+      latitude: preselectedLat ?? prev.latitude,
+      longitude: preselectedLng ?? prev.longitude,
+      location: preselectedAddress ?? prev.location,
+      step: 1,
+    }));
+  }, [preselectedCompanyId, preselectedLat, preselectedLng, preselectedAddress]);
+
+  useEffect(() => {
+    if (!newReq.selectedCompanyId || typeof window === "undefined") return;
+    window.localStorage.setItem(SELECTED_COMPANY_STORAGE_KEY, String(newReq.selectedCompanyId));
+  }, [newReq.selectedCompanyId]);
+
+  useEffect(() => {
+    const hasCompany = !!newReq.selectedCompanyId;
+    const hasGps = Number.isFinite(newReq.latitude) && Number.isFinite(newReq.longitude);
+
+    if (!hasCompany || hasGps || hasAutoGpsTriedRef.current) return;
+
+    hasAutoGpsTriedRef.current = true;
+    void getGpsLocation();
+  }, [newReq.selectedCompanyId, newReq.latitude, newReq.longitude]);
+
+  useEffect(() => {
+    if (!Number.isFinite(newReq.latitude) || !Number.isFinite(newReq.longitude)) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const nearbyData = await getNearbyCompanies(newReq.latitude, newReq.longitude, 30);
+        if (cancelled) return;
+
+        const nearbyDistanceMap = new Map(
+          (nearbyData.data ?? []).map((item) => [String(item.company_id), Number(item.distance_km)])
+        );
+
+        setCompanies((prev) =>
+          prev.map((c) => {
+            const d = nearbyDistanceMap.get(String(c.company_id ?? c.id));
+            return {
+              ...c,
+              distance: Number.isFinite(d) ? d : c.distance,
+            };
+          })
+        );
+      } catch (error) {
+        console.error("Lỗi lấy khoảng cách công ty gần nhất:", error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [newReq.latitude, newReq.longitude]);
+
   const requestServiceByName = useMemo(() => {
     const map = new Map();
     for (const s of services) map.set(s.name, s);
     return map;
   }, [services]);
 
-  const useGps = async () => {
+  const { latitude, longitude, selectedCompanyId } = newReq;
+
+  const companiesWithDistance = useMemo(() => {
+    const sortedByGps = [...companies]
+      .map((company) => {
+        let distanceKm = Number.isFinite(Number(company.distance)) && Number(company.distance) < 99
+          ? Number(company.distance)
+          : null;
+
+        if (
+          distanceKm == null &&
+          Number.isFinite(latitude) &&
+          Number.isFinite(longitude) &&
+          (Array.isArray(company.absolute_address?.coordinates) ||
+            (Number.isFinite(company.lat) && Number.isFinite(company.lng)))
+        ) {
+          const [lng, lat] = Array.isArray(company.absolute_address?.coordinates)
+            ? company.absolute_address.coordinates
+            : [company.lng, company.lat];
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            distanceKm = calculateDistance(latitude, longitude, lat, lng);
+          }
+        }
+
+        return {
+          ...company,
+          distanceKm,
+          etaMinutes: Number.isFinite(distanceKm) ? calculateETA(distanceKm) : null,
+        };
+      })
+      .sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999));
+
+    if (!selectedCompanyId) return sortedByGps;
+
+    const selectedIndex = sortedByGps.findIndex((c) => String(c.id) === String(selectedCompanyId));
+    if (selectedIndex <= 0) return sortedByGps;
+
+    const selectedCompany = sortedByGps[selectedIndex];
+    return [selectedCompany, ...sortedByGps.slice(0, selectedIndex), ...sortedByGps.slice(selectedIndex + 1)];
+  }, [companies, latitude, longitude, selectedCompanyId]);
+
+  const getGpsLocation = async () => {
     if (!navigator.geolocation) {
       window.alert("Trình duyệt không hỗ trợ GPS.");
       return null;
     }
 
+    setGpsLoading(true);
+
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
+        async (pos) => {
           const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+
+          let formattedAddress = "Vị trí hiện tại";
+          try {
+            const geocoded = await reverseGeocode(coords.lat, coords.lng);
+            formattedAddress = formatAddress(geocoded.fullAddress, geocoded.address_components);
+          } catch (error) {
+            console.error("Không thể chuyển tọa độ sang địa chỉ:", error);
+          }
+
           setNewReq((prev) => ({
             ...prev,
             latitude: coords.lat,
             longitude: coords.lng,
+            location: formattedAddress,
           }));
+          setGpsLoading(false);
           resolve(coords);
         },
         () => {
           window.alert("Không lấy được vị trí GPS. Vui lòng cấp quyền vị trí.");
+          setGpsLoading(false);
           resolve(null);
         },
         { enableHighAccuracy: true, timeout: 10000 }
       );
     });
+  };
+
+  const openImagePicker = () => {
+    imageInputRef.current?.click();
+  };
+
+  const handleImageSelection = async (event) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+
+    if (files.length === 0) return;
+
+    setImageUploading(true);
+    try {
+      const uploaded = [];
+
+      for (const file of files) {
+        if (!file.type.startsWith("image/")) {
+          continue;
+        }
+
+        const result = await uploadRequestImageToCloudinary(file);
+        uploaded.push(result.secureUrl);
+      }
+
+      if (uploaded.length > 0) {
+        setNewReq((prev) => ({
+          ...prev,
+          imageUrls: [...prev.imageUrls, ...uploaded],
+        }));
+      }
+    } catch (error) {
+      console.error("Không thể tải ảnh lên Cloudinary:", error);
+      window.alert(error instanceof Error ? error.message : "Không thể tải ảnh lên");
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  const removeUploadedImage = (imageUrl) => {
+    setNewReq((prev) => ({
+      ...prev,
+      imageUrls: prev.imageUrls.filter((url) => url !== imageUrl),
+    }));
   };
 
   const submitRequest = async () => {
@@ -201,7 +398,7 @@ export default function UserDashboard() {
     let lat = newReq.latitude;
     let lng = newReq.longitude;
     if (lat == null || lng == null) {
-      const coords = await useGps();
+      const coords = await getGpsLocation();
       if (coords) {
         lat = coords.lat;
         lng = coords.lng;
@@ -234,6 +431,16 @@ export default function UserDashboard() {
           });
         } catch (e) {
           console.error(e);
+        }
+      }
+    }
+
+    if (Array.isArray(newReq.imageUrls) && newReq.imageUrls.length > 0) {
+      for (const imageUrl of newReq.imageUrls) {
+        try {
+          await addRequestImage(created.request_id, { image_url: imageUrl });
+        } catch (error) {
+          console.error("Không thể lưu ảnh cho yêu cầu:", error);
         }
       }
     }
@@ -395,15 +602,74 @@ export default function UserDashboard() {
                   {newReq.step > step ? <CheckCircle2 size={16} /> : step}
                 </div>
                 <span className={`text-sm ${newReq.step >= step ? "text-pink-600 font-medium" : "text-gray-400"}`}>
-                  {step === 1 ? "Loại sự cố" : step === 2 ? "Thông tin & Vị trí" : "Chọn đơn vị"}
+                  {step === 1 ? "Chọn đơn vị" : step === 2 ? "Loại sự cố" : "Thông tin & Vị trí"}
                 </span>
                 {step < 3 && <div className={`w-8 h-0.5 ${newReq.step > step ? "bg-pink-300" : "bg-gray-200"}`} />}
               </div>
             ))}
           </div>
 
-          {/* Step 1: Service type */}
+          {/* Step 1: Choose company */}
           {newReq.step === 1 && (
+            <div>
+              <h2 className="text-lg font-bold text-gray-800 mb-2">Chọn đơn vị cứu hộ</h2>
+              <p className="text-sm text-gray-500 mb-4">
+                {Number.isFinite(newReq.latitude) && Number.isFinite(newReq.longitude)
+                  ? "Các đơn vị gần bạn nhất (sắp xếp theo GPS):"
+                  : "Các đơn vị gần bạn nhất (hãy bấm GPS để sắp xếp chính xác):"}
+              </p>
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                {companiesWithDistance.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setNewReq({ ...newReq, selectedCompanyId: c.id })}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                      newReq.selectedCompanyId === c.id
+                        ? "border-pink-400 bg-pink-50"
+                        : "border-gray-100 hover:border-pink-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-gray-800">{c.name}</p>
+                        <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                          <span className="flex items-center gap-1">
+                            <Star size={11} className="fill-yellow-400 text-yellow-400" />
+                            {c.rating}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <MapPin size={11} className="text-pink-400" />
+                            {Number.isFinite(c.distanceKm) ? `${c.distanceKm.toFixed(1)} km` : "Chưa có dữ liệu"}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock size={11} className="text-blue-400" />
+                            {Number.isFinite(c.etaMinutes)
+                              ? `~${c.etaMinutes} phút`
+                              : Number.isFinite(Number(c.responseTime))
+                              ? `~${Number(c.responseTime)} phút`
+                              : "Chưa có ETA"}
+                          </span>
+                        </div>
+                      </div>
+                      {newReq.selectedCompanyId === c.id && (
+                        <CheckCircle2 size={20} className="text-pink-500" />
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <button
+                disabled={!newReq.selectedCompanyId}
+                onClick={() => setNewReq({ ...newReq, step: 2 })}
+                className="mt-6 w-full bg-linear-to-r from-pink-500 to-pink-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md hover:shadow-pink-200 transition-all"
+              >
+                Tiếp theo
+              </button>
+            </div>
+          )}
+
+          {/* Step 2: Service type */}
+          {newReq.step === 2 && (
             <div>
               <h2 className="text-lg font-bold text-gray-800 mb-4">Chọn loại sự cố</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -423,21 +689,37 @@ export default function UserDashboard() {
                   </button>
                 ))}
               </div>
-              <button
-                disabled={!newReq.serviceType}
-                onClick={() => setNewReq({ ...newReq, step: 2 })}
-                className="mt-6 w-full bg-linear-to-r from-pink-500 to-pink-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md hover:shadow-pink-200 transition-all"
-              >
-                Tiếp theo
-              </button>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setNewReq({ ...newReq, step: 1 })}
+                  className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Quay lại
+                </button>
+                <button
+                  disabled={!newReq.serviceType}
+                  onClick={() => setNewReq({ ...newReq, step: 3 })}
+                  className="flex-1 bg-linear-to-r from-pink-500 to-pink-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md hover:shadow-pink-200 transition-all"
+                >
+                  Tiếp theo
+                </button>
+              </div>
             </div>
           )}
 
-          {/* Step 2: Details */}
-          {newReq.step === 2 && (
+          {/* Step 3: Details */}
+          {newReq.step === 3 && (
             <div>
               <h2 className="text-lg font-bold text-gray-800 mb-4">Mô tả sự cố & Vị trí</h2>
               <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Đơn vị đã chọn
+                  </label>
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-sm text-blue-700 font-medium">
+                    {companies.find((c) => c.id === newReq.selectedCompanyId)?.name || "Chưa chọn đơn vị"}
+                  </div>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Dịch vụ đã chọn
@@ -474,81 +756,55 @@ export default function UserDashboard() {
                   </div>
                   <button
                     type="button"
-                    onClick={useGps}
-                    className="mt-1.5 text-xs text-blue-600 flex items-center gap-1 hover:text-blue-700"
+                    onClick={getGpsLocation}
+                    disabled={gpsLoading}
+                    className="mt-1.5 text-xs text-blue-600 flex items-center gap-1 hover:text-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <Navigation size={12} />
-                    Dùng vị trí GPS hiện tại
+                    {gpsLoading ? <Loader2 size={12} className="animate-spin" /> : <Navigation size={12} />}
+                    {gpsLoading ? "Đang lấy GPS..." : "Dùng vị trí GPS hiện tại"}
                   </button>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Hình ảnh (không bắt buộc)
                   </label>
-                  <button className="w-full border-2 border-dashed border-pink-200 rounded-xl py-6 flex flex-col items-center gap-2 text-pink-400 hover:border-pink-400 hover:bg-pink-50 transition-colors">
-                    <Camera size={24} />
-                    <span className="text-sm">Chụp hoặc tải ảnh lên</span>
-                  </button>
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setNewReq({ ...newReq, step: 1 })}
-                  className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
-                >
-                  Quay lại
-                </button>
-                <button
-                  disabled={!newReq.description || !newReq.location}
-                  onClick={() => setNewReq({ ...newReq, step: 3 })}
-                  className="flex-1 bg-linear-to-r from-pink-500 to-pink-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md hover:shadow-pink-200 transition-all"
-                >
-                  Tìm đơn vị cứu hộ
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Choose company */}
-          {newReq.step === 3 && (
-            <div>
-              <h2 className="text-lg font-bold text-gray-800 mb-2">Chọn đơn vị cứu hộ</h2>
-              <p className="text-sm text-gray-500 mb-4">Các đơn vị gần bạn nhất:</p>
-              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                {companies.map((c) => (
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleImageSelection}
+                  />
                   <button
-                    key={c.id}
-                    onClick={() => setNewReq({ ...newReq, selectedCompanyId: c.id })}
-                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-                      newReq.selectedCompanyId === c.id
-                        ? "border-pink-400 bg-pink-50"
-                        : "border-gray-100 hover:border-pink-200"
-                    }`}
+                    type="button"
+                    onClick={openImagePicker}
+                    disabled={imageUploading}
+                    className="w-full border-2 border-dashed border-pink-200 rounded-xl py-6 flex flex-col items-center gap-2 text-pink-400 hover:border-pink-400 hover:bg-pink-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold text-gray-800">{c.name}</p>
-                        <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
-                          <span className="flex items-center gap-1">
-                            <Star size={11} className="fill-yellow-400 text-yellow-400" />
-                            {c.rating}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MapPin size={11} className="text-pink-400" />
-                            {c.distance ?? 0} km
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock size={11} className="text-blue-400" />
-                            ~{c.responseTime} phút
-                          </span>
-                        </div>
-                      </div>
-                      {newReq.selectedCompanyId === c.id && (
-                        <CheckCircle2 size={20} className="text-pink-500" />
-                      )}
-                    </div>
+                    {imageUploading ? <Loader2 size={24} className="animate-spin" /> : <Camera size={24} />}
+                    <span className="text-sm">
+                      {imageUploading ? "Đang tải ảnh lên..." : "Chụp hoặc tải ảnh lên"}
+                    </span>
                   </button>
-                ))}
+                  {newReq.imageUrls.length > 0 && (
+                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {newReq.imageUrls.map((imageUrl) => (
+                        <div key={imageUrl} className="relative rounded-xl overflow-hidden border border-pink-100 bg-pink-50">
+                          <img src={imageUrl} alt="Ảnh sự cố" className="h-24 w-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeUploadedImage(imageUrl)}
+                            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70"
+                            aria-label="Xóa ảnh"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex gap-3 mt-4">
                 <button
@@ -558,10 +814,11 @@ export default function UserDashboard() {
                   Quay lại
                 </button>
                 <button
-                  disabled={!newReq.selectedCompanyId}
+                  disabled={!newReq.selectedCompanyId || !newReq.description || !newReq.location || imageUploading}
                   onClick={() => {
                     submitRequest()
                       .then(() => {
+                        const rememberedCompanyId = newReq.selectedCompanyId;
                         setActiveTab("requests");
                         setNewReq({
                           serviceType: "",
@@ -570,7 +827,8 @@ export default function UserDashboard() {
                           latitude: undefined,
                           longitude: undefined,
                           step: 1,
-                          selectedCompanyId: "",
+                          selectedCompanyId: rememberedCompanyId,
+                          imageUrls: [],
                         });
                       })
                       .catch((e) => {

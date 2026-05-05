@@ -13,6 +13,8 @@ import {
 export function useGPS(shouldWatch = false) {
   const [location, setLocation] = useState(null); // {latitude, longitude, accuracy}
   const [address, setAddress] = useState(""); // Địa chỉ con người
+  const [fullAddress, setFullAddress] = useState(""); // Địa chỉ đầy đủ từ Nominatim
+  const [addressComponents, setAddressComponents] = useState(null); // Thành phần địa chỉ từ Nominatim
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const watchIdRef = useRef(null);
@@ -28,6 +30,8 @@ export function useGPS(shouldWatch = false) {
       // Lấy địa chỉ từ tọa độ
       const geocoded = await reverseGeocode(loc.latitude, loc.longitude);
       setAddress(geocoded.address);
+      setFullAddress(geocoded.fullAddress);
+      setAddressComponents(geocoded.address_components);
     } catch (err) {
       setError(err.message);
       console.error("GPS Error:", err);
@@ -45,6 +49,8 @@ export function useGPS(shouldWatch = false) {
           setLocation(loc);
           reverseGeocode(loc.latitude, loc.longitude).then((geocoded) => {
             setAddress(geocoded.address);
+            setFullAddress(geocoded.fullAddress);
+            setAddressComponents(geocoded.address_components);
           });
           setLoading(false);
         },
@@ -82,6 +88,8 @@ export function useGPS(shouldWatch = false) {
   return {
     location, // {latitude, longitude, accuracy}
     address,
+    fullAddress,
+    addressComponents,
     loading,
     error,
     getCurrentLocation: getCurrentLocationHandler,
