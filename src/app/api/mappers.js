@@ -1,0 +1,131 @@
+export function toUiUser(role, data) {
+  if (role === "company") {
+    const c = data;
+    return {
+      id: String(c.company_id),
+      name: c.company_name,
+      email: "",
+      phone: c.company_phone,
+      role,
+      avatar: c.company_name?.slice(0, 1)?.toUpperCase() ?? "C",
+      createdAt: c.registered_at,
+    };
+  }
+
+  const u = data;
+  return {
+    id: String(u.user_id),
+    name: u.full_name || u.user_name,
+    email: u.user_email ?? "",
+    phone: u.user_phone,
+    role,
+    avatar: (u.full_name || u.user_name)?.slice(0, 1)?.toUpperCase() ?? "U",
+    createdAt: u.registered_at,
+  };
+}
+
+export function toUiService(s) {
+  return {
+    id: String(s.service_id),
+    name: s.service_name,
+    description: s.service_description ?? "",
+    icon: "🛠️",
+    price: "Liên hệ",
+    duration: "",
+  };
+}
+
+export function toUiCompany(c, companyServices) {
+  const services = (companyServices ?? []).map((x) => x.service_name);
+  const geoLocation = parseGeoJsonPoint(c.absolute_address);
+  const rawRating = Number(c.rating);
+  const rawReviewCount = Number(c.total_reviews);
+  const rawResponseTime = Number(c.response_time_minutes);
+  
+  return {
+    id: String(c.company_id),
+    company_id: c.company_id, // Keep original ID for API
+    name: c.company_name,
+    company_name: c.company_name, // Keep for map
+    address: c.relative_address ?? "",
+    relative_address: c.relative_address ?? "",
+    phone: c.company_phone,
+    company_phone: c.company_phone,
+    email: "",
+    rating: Number.isFinite(rawRating) ? rawRating : null,
+    totalReviews: Number.isFinite(rawReviewCount) ? rawReviewCount : null,
+    distance: 99,
+    operatingArea: c.rescue_area ?? "",
+    license: c.company_license ?? "",
+    verified: !!c.is_verified,
+    services,
+    description: c.rescue_area ? `Khu vực hoạt động: ${c.rescue_area}` : "",
+    responseTime: Number.isFinite(rawResponseTime) ? rawResponseTime : null,
+    // Add GPS data for map
+    absolute_address: typeof c.absolute_address === 'string' 
+      ? parseGeoJsonFromString(c.absolute_address)
+      : c.absolute_address,
+    lat: geoLocation.lat,
+    lng: geoLocation.lng,
+  };
+}
+
+function parseGeoJsonPoint(geoJson) {
+  if (!geoJson) return {};
+  try {
+    const obj = typeof geoJson === "string" ? JSON.parse(geoJson) : geoJson;
+    if (obj && obj.type === "Point" && Array.isArray(obj.coordinates) && obj.coordinates.length >= 2) {
+      const [lng, lat] = obj.coordinates;
+      if (typeof lat === "number" && typeof lng === "number") return { lat, lng };
+    }
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
+function parseGeoJsonFromString(geoJsonString) {
+  if (!geoJsonString) return null;
+  try {
+    const obj = typeof geoJsonString === 'string' ? JSON.parse(geoJsonString) : geoJsonString;
+    if (obj && obj.type === "Point" && Array.isArray(obj.coordinates)) {
+      return obj;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+export function toUiRequest(r, lookup) {
+  const status =
+    r.request_status === "pending"
+      ? "pending"
+      : r.request_status === "accepted"
+      ? "accepted"
+      : r.request_status === "completed"
+      ? "completed"
+      : r.request_status === "cancelled"
+      ? "cancelled"
+      : "in_progress";
+
+  const point = parseGeoJsonPoint(r.absolute_location);
+
+  return {
+    id: String(r.request_id),
+    userId: r.user_id != null ? String(r.user_id) : "",
+    userName: lookup?.userName ?? "",
+    userPhone: lookup?.userPhone ?? "",
+    serviceType: lookup?.serviceType ?? "",
+    description: r.request_description ?? "",
+    location: r.relative_location ?? "",
+    latitude: point.lat,
+    longitude: point.lng,
+    status,
+    companyId: r.company_id != null ? String(r.company_id) : undefined,
+    companyName: lookup?.companyName,
+    estimatedTime: r.estimated_arrival ? undefined : undefined,
+    createdAt: r.created_at,
+    updatedAt: r.completed_at ?? r.actual_arrival ?? r.created_at,
+  };
+}

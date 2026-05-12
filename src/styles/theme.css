@@ -1,0 +1,96 @@
+/* RescueGo - Pink & Pastel Blue Theme */
+:root {
+  --color-primary: #ec4899;
+  --color-primary-light: #fce7f3;
+  --color-secondary: #60a5fa;
+  --color-secondary-light: #dbeafe;
+  --color-bg: #fdf8ff;
+  --radius-card: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--color-bg);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #1f2937;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #fce7f3;
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb {
+  background: #f9a8d4;
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #ec4899;
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.3;
+  color: #111827;
+}
+
+/* Line clamp */
+.line-clamp-1 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* Glassmorphism */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+/* Smooth transitions */
+a, button {
+  transition: all 0.2s ease;
+}
+
+/* Focus ring */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+}
+
+/* Keep Leaflet layers from bleeding over other app sections */
+.service-map-shell {
+  isolation: isolate;
+  z-index: 0;
+}
+
+.service-map-shell .leaflet-container {
+  z-index: 0;
+}
+
+.service-map-shell .leaflet-pane,
+.service-map-shell .leaflet-top,
+.service-map-shell .leaflet-bottom {
+  z-index: 1;
+}
+
+.service-map-shell .leaflet-control,
+.service-map-shell .leaflet-popup {
+  z-index: 2;
+}
