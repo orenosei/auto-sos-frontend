@@ -16,9 +16,9 @@ import {
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { useGPS } from "../hooks/useGPS";
-import { getNearbyCompanies } from "../api/companies";
-import { getCompanyServices } from "../api/companies";
+import { getCompanies, getNearbyCompanies, getCompanyServices, getCompanyRating } from "../api/companies";
 import { createRequest, updateRequestStatus } from "../api/requests";
+import { calculateDistance } from "../utils/gpsUtils";
 
 /* ─── Constants ──────────────────────────────────────── */
 const ISSUE_TYPES = [
@@ -61,6 +61,28 @@ const URGENCY_LABELS = {
   high: { label: "Ưu tiên cao", color: "text-orange-600 bg-orange-100" },
   medium: { label: "Bình thường", color: "text-blue-600 bg-blue-100" },
 };
+
+function parseGeoJsonPoint(geoJson) {
+  if (!geoJson) return null;
+  try {
+    const parsed = typeof geoJson === "string" ? JSON.parse(geoJson) : geoJson;
+    if (parsed?.type === "Point" && Array.isArray(parsed.coordinates) && parsed.coordinates.length >= 2) {
+      const [lng, lat] = parsed.coordinates;
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        return { lat, lng };
+      }
+    }
+  } catch {
+    // ignore malformed geojson
+  }
+  return null;
+}
+
+function getDistanceFromLocation(company, coords) {
+  const point = parseGeoJsonPoint(company.absolute_address);
+  if (!point || !coords) return null;
+  return calculateDistance(coords.latitude, coords.longitude, point.lat, point.lng);
+}
 
 /* ─── Sub-components ─────────────────────────────────── */
 function PulseRing({ delay = 0 }) {
@@ -119,18 +141,27 @@ export function EmergencySOS() {
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [nearbyCompanies, setNearbyCompanies] = useState([]);
   const [etaSeconds, setEtaSeconds] = useState(0);
+  const [initialEtaSeconds, setInitialEtaSeconds] = useState(0);
   const [requestId, setRequestId] = useState("");
   const [creatingRequest, setCreatingRequest] = useState(false);
   const [gpsError, setGpsError] = useState(null);
   const timerRef = useRef(null);
 
-  const { getCurrentLocation } = useGPS();
+  const { getCurrentLocation, loading: gpsLoading, error: gpsHookError } = useGPS();
 
   const openSOS = useCallback(() => {
     setIsOpen(true);
     setStep("locating");
+    setLocation("");
+    setGpsCoords(null);
     setSelectedIssue(null);
     setSelectedCompany(null);
+    setNearbyCompanies([]);
+    setEtaSeconds(0);
+    setInitialEtaSeconds(0);
+    setRequestId("");
+    setGpsError(null);
+    setCreatingRequest(false);
   }, []);
 
   const closeSOS = useCallback(() => {
@@ -154,69 +185,91 @@ export function EmergencySOS() {
       
       const getLocationAndNearby = async () => {
         try {
-          // Lấy vị trí hiện tại
           const coords = await getCurrentLocation();
           setGpsCoords(coords);
-          setLocation("Vị trí hiện tại");
+          setLocation(coords.fullAddress || coords.address || `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`);
 
-          // Lấy danh sách công ty gần nhất
           const response = await getNearbyCompanies(
             coords.latitude,
             coords.longitude,
-            15 // Tìm trong bán kính 15km
+            15
           );
 
-          if (response.data && response.data.length > 0) {
-            // Lấy thông tin dịch vụ cho từng công ty
-            const companiesWithServices = await Promise.all(
-              response.data.slice(0, 5).map(async (c) => {
-                try {
-                  const services = await getCompanyServices(c.company_id);
-                  return {
-                    ...c,
-                    company_id: c.company_id,
-                    company_name: c.company_name,
-                    company_phone: c.company_phone,
-                    distance: c.distance_km,
-                    name: c.company_name,
-                    phone: c.company_phone,
-                    verified: !!c.is_verified,
-                    responseTime: 5,
-                    rating: Number(c.rating) || 4.5,
-                    services: services.map((s) => s.service_name),
-                    serviceDetails: services.map((s) => ({
-                      service_id: s.service_id,
-                      service_name: s.service_name,
-                      service_price: Number(s.service_price),
-                    })),
-                  };
-                } catch {
-                  return {
-                    ...c,
-                    company_id: c.company_id,
-                    company_name: c.company_name,
-                    company_phone: c.company_phone,
-                    name: c.company_name,
-                    phone: c.company_phone,
-                    verified: !!c.is_verified,
-                    distance: c.distance_km,
-                    responseTime: 5,
-                    rating: Number(c.rating) || 4.5,
-                    services: [],
-                    serviceDetails: [],
-                  };
-                }
+          let companyRows = response.data ?? [];
+
+          if (companyRows.length === 0) {
+            const allCompanies = await getCompanies();
+            companyRows = (Array.isArray(allCompanies) ? allCompanies : [])
+              .map((company) => {
+                const distanceKm = getDistanceFromLocation(company, coords);
+                if (!Number.isFinite(distanceKm)) return null;
+                return {
+                  ...company,
+                  distance_km: distanceKm,
+                };
               })
-            );
-            setNearbyCompanies(companiesWithServices);
-          } else {
-            setNearbyCompanies([]);
+              .filter(Boolean)
+              .sort((a, b) => Number(a.distance_km) - Number(b.distance_km))
+              .slice(0, 5);
           }
+
+          const companiesWithServices = await Promise.all(
+            companyRows.map(async (c) => {
+              const distanceKm = Number(c.distance_km ?? c.distance ?? 0);
+              const responseTime = Math.max(5, Math.round(distanceKm * 4 + 8));
+
+              try {
+                const [services, rating] = await Promise.all([
+                  getCompanyServices(c.company_id),
+                  getCompanyRating(c.company_id).catch(() => null),
+                ]);
+                return {
+                  ...c,
+                  company_id: c.company_id,
+                  company_name: c.company_name,
+                  company_phone: c.company_phone,
+                  distance: distanceKm,
+                  name: c.company_name,
+                  phone: c.company_phone,
+                  verified: !!c.is_verified,
+                  responseTime,
+                  rating: Number(rating?.average_rating ?? 0),
+                  reviewCount: Number(rating?.review_count ?? 0),
+                  services: Array.isArray(services) ? services.map((s) => s.service_name) : [],
+                  serviceDetails: Array.isArray(services)
+                    ? services.map((s) => ({
+                        service_id: s.service_id,
+                        service_name: s.service_name,
+                        service_price: Number(s.service_price),
+                      }))
+                    : [],
+                };
+              } catch {
+                return {
+                  ...c,
+                  company_id: c.company_id,
+                  company_name: c.company_name,
+                  company_phone: c.company_phone,
+                  name: c.company_name,
+                  phone: c.company_phone,
+                  verified: !!c.is_verified,
+                  distance: distanceKm,
+                  responseTime,
+                  rating: 0,
+                  reviewCount: 0,
+                  services: [],
+                  serviceDetails: [],
+                };
+              }
+            })
+          );
+
+          setNearbyCompanies(companiesWithServices);
 
           setStep("select_issue");
         } catch (error) {
           console.error("GPS Error:", error);
-          setGpsError(error.message);
+          setGpsError(error instanceof Error ? error.message : "Không thể xác định vị trí");
           setLocation("Không thể xác định vị trí");
           setNearbyCompanies([]);
           setStep("select_issue");
@@ -296,8 +349,9 @@ export function EmergencySOS() {
       });
 
       setSelectedCompany(company);
-      const eta = company.responseTime * 60 + Math.floor(Math.random() * 120);
+      const eta = Math.max(5, Number(company.responseTime ?? 5)) * 60;
       setEtaSeconds(eta);
+      setInitialEtaSeconds(eta);
       setRequestId(String(created.request_id));
       setStep("tracking");
     } catch (error) {
@@ -336,8 +390,9 @@ export function EmergencySOS() {
   const etaMinutes = Math.ceil(etaSeconds / 60);
 
   /* ─ Progress % for tracking bar ─ */
-  const totalEta = selectedCompany ? selectedCompany.responseTime * 60 : etaSeconds;
+  const totalEta = initialEtaSeconds || (selectedCompany ? selectedCompany.responseTime * 60 : etaSeconds);
   const progress = totalEta > 0 ? Math.min(100, ((totalEta - etaSeconds) / totalEta) * 100) : 100;
+  const showGpsNotice = Boolean(gpsError || gpsHookError);
 
   return (
     <>
@@ -431,7 +486,7 @@ export function EmergencySOS() {
               )}
 
               {/* GPS Error Notice */}
-              {gpsError && (
+              {showGpsNotice && (
                 <div className="relative mt-3 mx-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <p className="text-xs text-yellow-700">
                     <span className="font-semibold">Lưu ý:</span> Không thể xác định vị trí chính xác. Sử dụng danh sách công ty gần nhất.
@@ -537,11 +592,11 @@ export function EmergencySOS() {
                             <div className="flex items-center gap-3 text-xs text-gray-500">
                               <span className="flex items-center gap-0.5">
                                 <Star size={11} className="fill-yellow-400 text-yellow-400" />
-                                {company.rating}
+                                  {company.reviewCount ? company.rating : "Chưa có"}
                               </span>
                               <span className="flex items-center gap-0.5">
                                 <MapPin size={11} className="text-pink-400" />
-                                {company.distance} km
+                                  {Number(company.distance).toFixed(1)} km
                               </span>
                             </div>
                           </div>
@@ -636,7 +691,7 @@ export function EmergencySOS() {
                         <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
                           <span className="flex items-center gap-0.5">
                             <Star size={10} className="fill-yellow-400 text-yellow-400" />
-                            {selectedCompany.rating}
+                            {selectedCompany.reviewCount ? selectedCompany.rating : "Chưa có"}
                           </span>
                           <span>•</span>
                           <span>{selectedCompany.phone}</span>
