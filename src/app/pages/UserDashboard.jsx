@@ -27,7 +27,10 @@ import { getCompanies, getCompanyServices, getNearbyCompanies } from "../api/com
 import { getServices } from "../api/services";
 import { createRequest, getRequestServices, getRequests, updateRequestStatus } from "../api/requests";
 import { addRequestImage, uploadRequestImageToCloudinary } from "../api/requestImages";
+import { useToast } from "../components/ui/toast";
 import { toUiCompany, toUiRequest, toUiService } from "../api/mappers";
+import { getRequestMessages, addRequestMessage, markMessageSeen } from "../api/messages";
+import { addReview } from "../api/reviews";
 import { reverseGeocode, formatAddress, calculateDistance, calculateETA } from "../utils/gpsUtils";
 
 const statusConfig = {
@@ -109,6 +112,49 @@ export default function UserDashboard() {
   });
   const [ratingModal, setRatingModal] = useState({ open: false, requestId: "" });
   const [starValue, setStarValue] = useState(0);
+  const [ratingText, setRatingText] = useState("");
+  const [messageOpen, setMessageOpen] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [messageInput, setMessageInput] = useState("");
+  const messageTimerRef = useRef(null);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [submittingRequest, setSubmittingRequest] = useState(false);
+  const toast = useToast();
+
+  const openMessageModal = async (req) => {
+    setSelectedRequest(req);
+    setMessageOpen(true);
+    try {
+      const msgs = await getRequestMessages(req.id);
+      setMessages(msgs);
+      // mark company messages as seen
+      msgs.forEach((m) => {
+        if (m.message_sender === 'company' && !m.is_seen) {
+          markMessageSeen(req.id, m.message_id).catch(() => {});
+        }
+      });
+    } catch (e) {
+      console.error(e);
+    }
+
+    if (messageTimerRef.current) clearInterval(messageTimerRef.current);
+    messageTimerRef.current = setInterval(async () => {
+      try {
+        const msgs = await getRequestMessages(req.id);
+        setMessages(msgs);
+      } catch (e) {
+        // ignore
+      }
+    }, 3000);
+  };
+
+  const closeMessageModal = () => {
+    setMessageOpen(false);
+    if (messageTimerRef.current) {
+      clearInterval(messageTimerRef.current);
+      messageTimerRef.current = null;
+    }
+  };
   const [gpsLoading, setGpsLoading] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const hasAutoGpsTriedRef = useRef(false);
@@ -415,7 +461,8 @@ export default function UserDashboard() {
       window.alert("Vui lòng đăng nhập để gửi yêu cầu.");
       return;
     }
-
+    if (submittingRequest) return;
+    setSubmittingRequest(true);
     let lat = newReq.latitude;
     let lng = newReq.longitude;
     if (lat == null || lng == null) {
@@ -434,7 +481,9 @@ export default function UserDashboard() {
     const pickedService = requestServiceByName.get(newReq.serviceType);
     const serviceId = pickedService ? Number(pickedService.id) : null;
 
-    const created = await createRequest({
+    let created;
+    try {
+      created = await createRequest({
       user_id: userId,
       company_id: companyId != null && Number.isFinite(companyId) ? companyId : null,
       absolute_location: { lat, lng },
@@ -448,9 +497,22 @@ export default function UserDashboard() {
         selectedCompanyService && Number.isFinite(selectedCompanyService.price)
           ? selectedCompanyService.price
           : null,
-    });
+      });
+    } catch (err) {
+      console.error(err);
+      try {
+        toast.push({ title: "Gửi thất bại", description: err?.message ?? "Không thể gửi yêu cầu", type: "error" });
+      } catch {}
+      setSubmittingRequest(false);
+      throw err;
+    }
+    // success
+    try {
+      toast.push({ title: "Gửi thành công", description: "Yêu cầu của bạn đã được gửi", type: "success" });
+    } catch {}
+    setSubmittingRequest(false);
 
-    if (Array.isArray(newReq.imageUrls) && newReq.imageUrls.length > 0) {
+    if (created && Array.isArray(newReq.imageUrls) && newReq.imageUrls.length > 0) {
       for (const imageUrl of newReq.imageUrls) {
         try {
           await addRequestImage(created.request_id, { image_url: imageUrl });
@@ -864,32 +926,31 @@ export default function UserDashboard() {
                   Quay lại
                 </button>
                 <button
-                  disabled={!newReq.selectedCompanyId || !newReq.description || !newReq.location || imageUploading}
-                  onClick={() => {
-                    submitRequest()
-                      .then(() => {
-                        const rememberedCompanyId = newReq.selectedCompanyId;
-                        setActiveTab("requests");
-                        setNewReq({
-                          serviceType: "",
-                          description: "",
-                          location: "Đường Phạm Văn Đồng, Q. Bình Thạnh, TP.HCM",
-                          latitude: undefined,
-                          longitude: undefined,
-                          step: 1,
-                          selectedCompanyId: rememberedCompanyId,
-                          imageUrls: [],
-                        });
-                      })
-                      .catch((e) => {
-                        console.error(e);
-                        window.alert(e instanceof Error ? e.message : "Gửi yêu cầu thất bại");
+                  disabled={!newReq.selectedCompanyId || !newReq.description || !newReq.location || imageUploading || submittingRequest}
+                  onClick={async () => {
+                    try {
+                      await submitRequest();
+                      const rememberedCompanyId = newReq.selectedCompanyId;
+                      setActiveTab("requests");
+                      setNewReq({
+                        serviceType: "",
+                        description: "",
+                        location: "Đường Phạm Văn Đồng, Q. Bình Thạnh, TP.HCM",
+                        latitude: undefined,
+                        longitude: undefined,
+                        step: 1,
+                        selectedCompanyId: rememberedCompanyId,
+                        imageUrls: [],
                       });
+                    } catch (e) {
+                      console.error(e);
+                      window.alert(e instanceof Error ? e.message : "Gửi yêu cầu thất bại");
+                    }
                   }}
                   className="flex-1 bg-linear-to-r from-pink-500 to-pink-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md hover:shadow-pink-200 transition-all flex items-center justify-center gap-2"
                 >
-                  <Send size={16} />
-                  Gửi yêu cầu
+                  {submittingRequest ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  {submittingRequest ? "Đang gửi..." : "Gửi yêu cầu"}
                 </button>
               </div>
             </div>
@@ -1006,7 +1067,7 @@ export default function UserDashboard() {
                 {/* Actions */}
                 {selectedRequest.status !== "completed" && selectedRequest.status !== "cancelled" && (
                   <div className="flex gap-3 mt-4">
-                    <button className="flex-1 flex items-center justify-center gap-2 bg-blue-50 text-blue-600 py-2.5 rounded-xl text-sm font-medium hover:bg-blue-100 transition-colors">
+                    <button onClick={() => openMessageModal(selectedRequest)} className="flex-1 flex items-center justify-center gap-2 bg-blue-50 text-blue-600 py-2.5 rounded-xl text-sm font-medium hover:bg-blue-100 transition-colors">
                       <MessageCircle size={16} />
                       Nhắn tin
                     </button>
@@ -1054,16 +1115,75 @@ export default function UserDashboard() {
               ))}
             </div>
             <textarea
+              value={ratingText}
+              onChange={(e) => setRatingText(e.target.value)}
               placeholder="Chia sẻ cảm nhận của bạn về dịch vụ..."
               className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:border-pink-400"
               rows={3}
             />
             <button
-              onClick={() => setRatingModal({ open: false, requestId: "" })}
+              onClick={async () => {
+                try {
+                  await addReview(ratingModal.requestId, { review_rating: starValue, review_comment: ratingText });
+                } catch (e) {
+                  console.error(e);
+                }
+                setRatingModal({ open: false, requestId: "" });
+                setStarValue(0);
+                setRatingText("");
+                await refreshRequests();
+              }}
               className="mt-4 w-full bg-linear-to-r from-pink-500 to-pink-400 text-white py-3 rounded-xl font-semibold hover:shadow-md transition-all"
             >
               Gửi đánh giá
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Message modal */}
+      {messageOpen && selectedRequest && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-4 w-full max-w-lg shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold">Chat với {selectedRequest.companyName || 'đơn vị cứu hộ'}</h3>
+              <button onClick={() => closeMessageModal()} className="text-gray-400 hover:text-gray-600"><X /></button>
+            </div>
+
+            <div className="h-64 overflow-auto mb-3 p-2 border rounded-lg bg-gray-50" id="messages-scroll">
+              {messages.map((m) => (
+                <div key={m.message_id} className={`mb-2 p-2 rounded-lg ${m.message_sender === 'user' ? 'bg-pink-50 self-end text-right' : 'bg-white'}`}>
+                  <div className="text-xs text-gray-500 mb-1">{m.message_sender}</div>
+                  <div className="text-sm text-gray-800">{m.message_content}</div>
+                  <div className="text-xs text-gray-400 mt-1">{new Date(m.sent_at).toLocaleTimeString()}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <input value={messageInput} onChange={(e) => setMessageInput(e.target.value)} placeholder="Nhập tin nhắn..." className="flex-1 px-3 py-2 border rounded-xl" />
+              <button
+                onClick={async () => {
+                  if (!messageInput.trim() || sendingMessage) return;
+                  setSendingMessage(true);
+                  try {
+                    const created = await addRequestMessage(selectedRequest.id, { message_sender: 'user', message_content: messageInput });
+                    setMessages((prev) => [...prev, created]);
+                    setMessageInput('');
+                    try { toast.push({ title: 'Đã gửi', description: 'Tin nhắn đã được gửi', type: 'success' }); } catch {}
+                  } catch (e) {
+                    console.error(e);
+                    try { toast.push({ title: 'Lỗi', description: e?.message ?? 'Gửi tin nhắn thất bại', type: 'error' }); } catch {}
+                  } finally {
+                    setSendingMessage(false);
+                  }
+                }}
+                disabled={sendingMessage}
+                className="px-4 py-2 bg-pink-500 text-white rounded-xl disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {sendingMessage ? <Loader2 size={14} className="animate-spin" /> : "Gửi"}
+              </button>
+            </div>
           </div>
         </div>
       )}

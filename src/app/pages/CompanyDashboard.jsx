@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Car,
   Bell,
   CheckCircle2,
   Clock,
   XCircle,
+  X,
   Star,
   Phone,
   MapPin,
@@ -27,12 +28,16 @@ import {
   getCompanyServices,
   updateCompany,
   updateCompanyService,
+  getCompanyRating,
+  getCompanyReviews,
 } from "../api/companies";
 import { getServices } from "../api/services";
 import { getRequests, getRequestServices, updateRequestStatus } from "../api/requests";
 import { getUser } from "../api/users";
 import { createVehicle, deleteVehicle, getVehicles, updateVehicle } from "../api/vehicles";
 import { toUiRequest } from "../api/mappers";
+import { getRequestMessages, addRequestMessage, markMessageSeen } from "../api/messages";
+import { useToast } from "../components/ui/toast";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const statusConfig = {
@@ -54,6 +59,7 @@ const weeklyData = [
   { day: "T7", requests: 9, completed: 8 },
   { day: "CN", requests: 7, completed: 6 },
 ];
+
 
 export default function CompanyDashboard() {
   const { currentUser, isLoggedIn, updateCurrentUser } = useApp();
@@ -85,8 +91,39 @@ export default function CompanyDashboard() {
   const [editingServicePrice, setEditingServicePrice] = useState("");
   const [savingService, setSavingService] = useState(false);
   const [requests, setRequests] = useState([]);
+  // Compute chart data (requests + completed) for current week (Mon..Sun) from real requests
+  const chartData = useMemo(() => {
+    // Monday-based week labels
+    const labels = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+    const now = new Date();
+    const day = now.getDay(); // 0 Sun .. 6 Sat
+    const diffToMonday = (day + 6) % 7; // days to subtract to get Monday
+    const monday = new Date(now);
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(now.getDate() - diffToMonday);
+
+    const arr = labels.map((label, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dayStr = d.toDateString();
+      const requestsCount = requests.filter((r) => new Date(r.createdAt).toDateString() === dayStr).length;
+      const completedCount = requests.filter((r) => r.completedAt && new Date(r.completedAt).toDateString() === dayStr).length;
+      return { day: label, requests: requestsCount, completed: completedCount };
+    });
+
+    return arr;
+  }, [requests]);
   const [loadingRequests, setLoadingRequests] = useState(false);
+  const [messageOpen, setMessageOpen] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [messageInput, setMessageInput] = useState("");
+  const messageTimerRef = useRef(null);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState({});
+  const toast = useToast();
   const [vehicles, setVehicles] = useState([]);
+  const [ratingSummary, setRatingSummary] = useState({ average: null, count: 0 });
+  const [satisfactionRate, setSatisfactionRate] = useState(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
   const [etaMinutes, setEtaMinutes] = useState("20");
   const [finalPrice, setFinalPrice] = useState("");
@@ -119,6 +156,77 @@ export default function CompanyDashboard() {
       // ignore
     }
     return {};
+  };
+
+  const companyStats = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const startOfWeek = new Date(now);
+    const day = now.getDay();
+    const diffToMonday = (day + 6) % 7;
+    startOfWeek.setDate(now.getDate() - diffToMonday);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const todayRequests = requests.filter((r) => {
+      const createdAt = new Date(r.createdAt);
+      return Number.isFinite(createdAt.getTime()) && createdAt >= startOfToday;
+    }).length;
+
+    const activeRequests = requests.filter((r) => ["accepted", "heading", "arrived", "processing"].includes(r.status)).length;
+
+    const completedThisWeek = requests.filter((r) => {
+      if (r.status !== "completed" || !r.completedAt) return false;
+      const completedAt = new Date(r.completedAt);
+      return Number.isFinite(completedAt.getTime()) && completedAt >= startOfWeek;
+    }).length;
+
+    const monthlyRevenue = requests.reduce((total, r) => {
+      if (r.status !== "completed") return total;
+      const completedAt = r.completedAt ? new Date(r.completedAt) : null;
+      if (!completedAt || !Number.isFinite(completedAt.getTime()) || completedAt < startOfMonth) return total;
+      const amount = Number(r.finalPrice ?? r.servicePrice ?? 0);
+      return total + (Number.isFinite(amount) ? amount : 0);
+    }, 0);
+
+    const responseSamples = requests
+      .filter((r) => r.acceptedAt && (r.arrivedAt || r.completedAt))
+      .map((r) => {
+        const acceptedAt = new Date(r.acceptedAt);
+        const endAt = new Date(r.arrivedAt ?? r.completedAt);
+        if (!Number.isFinite(acceptedAt.getTime()) || !Number.isFinite(endAt.getTime())) return null;
+        return Math.max(0, Math.round((endAt.getTime() - acceptedAt.getTime()) / 60000));
+      })
+      .filter((v) => Number.isFinite(v));
+
+    const avgResponseMinutes = responseSamples.length
+      ? Math.round(responseSamples.reduce((sum, v) => sum + v, 0) / responseSamples.length)
+      : null;
+
+    const averageRating = Number.isFinite(ratingSummary.average) ? ratingSummary.average : null;
+    const reviewCount = Number.isFinite(ratingSummary.count) ? ratingSummary.count : 0;
+
+    return {
+      todayRequests,
+      activeRequests,
+      completedThisWeek,
+      monthlyRevenue,
+      avgResponseMinutes,
+      averageRating,
+      reviewCount,
+      satisfactionRate,
+    };
+  }, [requests, ratingSummary.average, ratingSummary.count, satisfactionRate]);
+
+  const formatRevenue = (value) => {
+    if (!Number.isFinite(value) || value <= 0) return "0đ";
+    if (value >= 1000000) {
+      return `${(value / 1000000).toFixed(value >= 10000000 ? 1 : 2).replace(/\.0$/, "")}M`;
+    }
+    return `${Math.round(value).toLocaleString("vi-VN")}đ`;
   };
 
   const companyRequests = requests;
@@ -228,6 +336,24 @@ export default function CompanyDashboard() {
         setEditingServicePrice("");
 
         await refreshRequests();
+        // fetch rating and reviews summary
+        if (companyId) {
+          try {
+            const r = await getCompanyRating(companyId);
+            if (!cancelled && r && r.average_rating != null) {
+              setRatingSummary({ average: Number(r.average_rating), count: Number(r.review_count ?? 0) });
+            }
+            const rev = await getCompanyReviews(companyId);
+            if (!cancelled && Array.isArray(rev)) {
+              const rows = rev;
+              const satisfied = rows.filter((x) => Number(x.review_rating) >= 4).length;
+              const rate = rows.length > 0 ? Math.round((satisfied / rows.length) * 100) : null;
+              setSatisfactionRate(rate);
+            }
+          } catch (err) {
+            // ignore rating errors
+          }
+        }
       } catch (e) {
         console.error(e);
       }
@@ -239,7 +365,18 @@ export default function CompanyDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, isLoggedIn]);
 
+  // Cleanup polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (messageTimerRef.current) {
+        clearInterval(messageTimerRef.current);
+        messageTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const handleStatusUpdate = async (req, next, extra = {}) => {
+    setStatusUpdating((s) => ({ ...s, [req.id]: true }));
     try {
       await updateRequestStatus(req.id, next, {
         changed_by: "company",
@@ -250,9 +387,13 @@ export default function CompanyDashboard() {
         const vehicleRows = await getVehicles(companyId);
         setVehicles(Array.isArray(vehicleRows) ? vehicleRows : []);
       }
+      try { toast.push({ title: 'Cập nhật', description: 'Cập nhật trạng thái thành công', type: 'success' }); } catch {}
     } catch (e) {
       console.error(e);
+      try { toast.push({ title: 'Lỗi', description: e?.message ?? 'Cập nhật trạng thái thất bại', type: 'error' }); } catch {}
       window.alert(e instanceof Error ? e.message : "Cập nhật trạng thái thất bại");
+    } finally {
+      setStatusUpdating((s) => ({ ...s, [req.id]: false }));
     }
   };
 
@@ -458,6 +599,44 @@ export default function CompanyDashboard() {
     }
   };
 
+  // Chat handlers for company side
+  const openMessageModal = async (req) => {
+    if (!req) return;
+    setSelectedReq(req);
+    setMessageOpen(true);
+    try {
+      const msgs = await getRequestMessages(req.id);
+      setMessages(msgs);
+      // mark user messages as seen
+      msgs.forEach((m) => {
+        if (m.message_sender === "user" && !m.is_seen) {
+          markMessageSeen(req.id, m.message_id).catch(() => {});
+        }
+      });
+    } catch (e) {
+      console.error(e);
+    }
+
+    if (messageTimerRef.current) clearInterval(messageTimerRef.current);
+    messageTimerRef.current = setInterval(async () => {
+      try {
+        const msgs = await getRequestMessages(req.id);
+        setMessages(msgs);
+      } catch (e) {
+        // ignore
+      }
+    }, 3000);
+  };
+
+  const closeMessageModal = () => {
+    setMessageOpen(false);
+    if (messageTimerRef.current) {
+      clearInterval(messageTimerRef.current);
+      messageTimerRef.current = null;
+    }
+    setMessageInput("");
+  };
+
   const tabs = [
     { key: "requests", label: "Yêu cầu", icon: <Bell size={16} /> },
     { key: "stats", label: "Thống kê", icon: <TrendingUp size={16} /> },
@@ -479,10 +658,16 @@ export default function CompanyDashboard() {
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-0.5">
                 {[1, 2, 3, 4, 5].map((s) => (
-                  <Star key={s} size={12} className={s <= 4 ? "fill-yellow-400 text-yellow-400" : "text-gray-200"} />
+                  <Star
+                    key={s}
+                    size={12}
+                    className={s <= Math.round(companyStats.averageRating ?? 0) ? "fill-yellow-400 text-yellow-400" : "text-gray-200"}
+                  />
                 ))}
               </div>
-              <span className="text-sm text-gray-500">4.8 · 256 đánh giá</span>
+              <span className="text-sm text-gray-500">
+                {(companyStats.averageRating ?? 0).toFixed(1)} · {companyStats.reviewCount} đánh giá
+              </span>
               {companyProfile?.verified && (
                 <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-200 flex items-center gap-1">
                   ✓ Đã xác minh
@@ -502,10 +687,38 @@ export default function CompanyDashboard() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {[
-          { label: "Yêu cầu hôm nay", value: "12", change: "+3", color: "from-pink-100 to-pink-50", text: "text-pink-600", icon: <Bell size={18} /> },
-          { label: "Đang xử lý", value: "3", change: "", color: "from-purple-100 to-purple-50", text: "text-purple-600", icon: <Loader2 size={18} className="animate-spin" /> },
-          { label: "Hoàn tất tuần này", value: "51", change: "+8%", color: "from-green-100 to-green-50", text: "text-green-600", icon: <CheckCircle2 size={18} /> },
-          { label: "Doanh thu tháng", value: "12.5M", change: "+15%", color: "from-blue-100 to-blue-50", text: "text-blue-600", icon: <TrendingUp size={18} /> },
+          {
+            label: "Yêu cầu hôm nay",
+            value: String(companyStats.todayRequests),
+            change: "",
+            color: "from-pink-100 to-pink-50",
+            text: "text-pink-600",
+            icon: <Bell size={18} />,
+          },
+          {
+            label: "Đang xử lý",
+            value: String(companyStats.activeRequests),
+            change: "",
+            color: "from-purple-100 to-purple-50",
+            text: "text-purple-600",
+            icon: <Loader2 size={18} className="animate-spin" />,
+          },
+          {
+            label: "Hoàn tất tuần này",
+            value: String(companyStats.completedThisWeek),
+            change: "",
+            color: "from-green-100 to-green-50",
+            text: "text-green-600",
+            icon: <CheckCircle2 size={18} />,
+          },
+          {
+            label: "Doanh thu tháng",
+            value: formatRevenue(companyStats.monthlyRevenue),
+            change: "",
+            color: "from-blue-100 to-blue-50",
+            text: "text-blue-600",
+            icon: <TrendingUp size={18} />,
+          },
         ].map((card, i) => (
           <div key={i} className={`bg-linear-to-br ${card.color} rounded-2xl p-4 border border-white shadow-sm`}>
             <div className="flex items-center justify-between mb-2">
@@ -679,6 +892,7 @@ export default function CompanyDashboard() {
                         <select
                           value={selectedVehicleId}
                           onChange={(e) => setSelectedVehicleId(e.target.value)}
+                          disabled={!!statusUpdating[selectedReq.id]}
                           className="mt-1 w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
                         >
                           <option value="">Chưa chọn xe</option>
@@ -696,6 +910,7 @@ export default function CompanyDashboard() {
                           min="1"
                           value={etaMinutes}
                           onChange={(e) => setEtaMinutes(e.target.value)}
+                          disabled={!!statusUpdating[selectedReq.id]}
                           className="mt-1 w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
                         />
                       </div>
@@ -708,38 +923,42 @@ export default function CompanyDashboard() {
                             note: "Company accepted request",
                           });
                         }}
-                        className="w-full bg-linear-to-r from-blue-500 to-blue-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md hover:shadow-blue-200 transition-all flex items-center justify-center gap-2"
+                        disabled={!!statusUpdating[selectedReq.id]}
+                        className="w-full bg-linear-to-r from-blue-500 to-blue-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md hover:shadow-blue-200 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        <CheckCircle2 size={16} />
-                        Tiếp nhận yêu cầu
+                        {statusUpdating[selectedReq.id] ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                        {statusUpdating[selectedReq.id] ? "Đang xử lý..." : "Tiếp nhận yêu cầu"}
                       </button>
                     </div>
                   )}
                   {selectedReq.status === "accepted" && (
                     <button
                       onClick={() => handleStatusUpdate(selectedReq, "heading", { note: "Vehicle is heading to customer" })}
-                      className="w-full bg-linear-to-r from-indigo-500 to-indigo-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2"
+                      disabled={!!statusUpdating[selectedReq.id]}
+                      className="w-full bg-linear-to-r from-indigo-500 to-indigo-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <Loader2 size={16} />
-                      Bắt đầu di chuyển
+                      {statusUpdating[selectedReq.id] ? <Loader2 size={16} className="animate-spin" /> : <Loader2 size={16} />}
+                      {statusUpdating[selectedReq.id] ? "Đang xử lý..." : "Bắt đầu di chuyển"}
                     </button>
                   )}
                   {selectedReq.status === "heading" && (
                     <button
                       onClick={() => handleStatusUpdate(selectedReq, "arrived", { note: "Vehicle arrived" })}
-                      className="w-full bg-linear-to-r from-cyan-500 to-cyan-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2"
+                      disabled={!!statusUpdating[selectedReq.id]}
+                      className="w-full bg-linear-to-r from-cyan-500 to-cyan-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <MapPin size={16} />
-                      Đã đến hiện trường
+                      {statusUpdating[selectedReq.id] ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} />}
+                      {statusUpdating[selectedReq.id] ? "Đang xử lý..." : "Đã đến hiện trường"}
                     </button>
                   )}
                   {selectedReq.status === "arrived" && (
                     <button
                       onClick={() => handleStatusUpdate(selectedReq, "processing", { note: "Started processing incident" })}
-                      className="w-full bg-linear-to-r from-purple-500 to-purple-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2"
+                      disabled={!!statusUpdating[selectedReq.id]}
+                      className="w-full bg-linear-to-r from-purple-500 to-purple-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <Loader2 size={16} />
-                      Bắt đầu xử lý
+                      {statusUpdating[selectedReq.id] ? <Loader2 size={16} className="animate-spin" /> : <Loader2 size={16} />}
+                      {statusUpdating[selectedReq.id] ? "Đang xử lý..." : "Bắt đầu xử lý"}
                     </button>
                   )}
                   {selectedReq.status === "processing" && (
@@ -762,15 +981,16 @@ export default function CompanyDashboard() {
                             note: "Request completed",
                           });
                         }}
-                        className="w-full bg-linear-to-r from-green-500 to-green-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2"
+                        disabled={!!statusUpdating[selectedReq.id]}
+                        className="w-full bg-linear-to-r from-green-500 to-green-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        <CheckCircle2 size={16} />
-                        Xác nhận hoàn tất
+                        {statusUpdating[selectedReq.id] ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                        {statusUpdating[selectedReq.id] ? "Đang xử lý..." : "Xác nhận hoàn tất"}
                       </button>
                     </div>
                   )}
                   <div className="flex gap-2">
-                    <button className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-blue-200 text-blue-600 text-sm hover:bg-blue-50 transition-colors">
+                    <button onClick={() => openMessageModal(selectedReq)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-blue-200 text-blue-600 text-sm hover:bg-blue-50 transition-colors">
                       <MessageCircle size={15} />
                       Nhắn tin
                     </button>
@@ -786,10 +1006,11 @@ export default function CompanyDashboard() {
                         cancel_reason: "Company rejected request",
                         note: "Company rejected request",
                       })}
-                      className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-red-200 text-red-500 text-sm hover:bg-red-50 transition-colors"
+                      disabled={!!statusUpdating[selectedReq.id]}
+                      className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-red-200 text-red-500 text-sm hover:bg-red-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <XCircle size={15} />
-                      Từ chối
+                      {statusUpdating[selectedReq.id] ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={15} />}
+                      {statusUpdating[selectedReq.id] ? "Đang xử lý..." : "Từ chối"}
                     </button>
                   )}
                 </div>
@@ -804,13 +1025,60 @@ export default function CompanyDashboard() {
         </div>
       )}
 
+      {/* Message modal for company */}
+      {messageOpen && selectedReq && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-4 w-full max-w-lg shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold">Chat với {selectedReq.userName || 'khách hàng'}</h3>
+              <button onClick={() => closeMessageModal()} className="text-gray-400 hover:text-gray-600"><X /></button>
+            </div>
+
+            <div className="h-64 overflow-auto mb-3 p-2 border rounded-lg bg-gray-50" id="company-messages-scroll">
+              {messages.map((m) => (
+                <div key={m.message_id} className={`mb-2 p-2 rounded-lg ${m.message_sender === 'company' ? 'bg-blue-50 self-end text-right' : 'bg-white'}`}>
+                  <div className="text-xs text-gray-500 mb-1">{m.message_sender}</div>
+                  <div className="text-sm text-gray-800">{m.message_content}</div>
+                  <div className="text-xs text-gray-400 mt-1">{new Date(m.sent_at).toLocaleTimeString()}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <input value={messageInput} onChange={(e) => setMessageInput(e.target.value)} placeholder="Nhập tin nhắn..." className="flex-1 px-3 py-2 border rounded-xl" />
+              <button
+                onClick={async () => {
+                  if (!messageInput.trim() || sendingMessage) return;
+                  setSendingMessage(true);
+                  try {
+                    const created = await addRequestMessage(selectedReq.id, { message_sender: 'company', message_content: messageInput });
+                    setMessages((prev) => [...prev, created]);
+                    setMessageInput('');
+                      try { toast.push({ title: 'Đã gửi', description: 'Tin nhắn đã được gửi', type: 'success' }); } catch {}
+                  } catch (e) {
+                    console.error(e);
+                      try { toast.push({ title: 'Lỗi', description: e?.message ?? 'Gửi tin nhắn thất bại', type: 'error' }); } catch {}
+                  } finally {
+                    setSendingMessage(false);
+                  }
+                }}
+                disabled={sendingMessage}
+                className="px-4 py-2 bg-blue-600 text-white rounded-xl disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {sendingMessage ? <Loader2 size={14} className="animate-spin" /> : "Gửi"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tab: Stats */}
       {activeTab === "stats" && (
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-pink-100 p-6">
             <h3 className="font-bold text-gray-900 mb-4">Yêu cầu theo ngày trong tuần</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={weeklyData} barSize={32}>
+              <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={chartData} barSize={32}>
                 <CartesianGrid key="grid" strokeDasharray="3 3" stroke="#f3f4f6" />
                 <XAxis key="xaxis" dataKey="day" tick={{ fontSize: 12, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                 <YAxis key="yaxis" tick={{ fontSize: 12, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
@@ -830,20 +1098,28 @@ export default function CompanyDashboard() {
                 <Star size={18} className="text-yellow-500" />
                 <span className="font-semibold text-gray-700">Đánh giá</span>
               </div>
-              <p className="text-3xl font-bold text-gray-900">4.8</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {(companyStats.averageRating ?? 0).toFixed(1)}
+              </p>
               <div className="flex items-center gap-0.5 mt-1">
                 {[1, 2, 3, 4, 5].map((s) => (
-                  <Star key={s} size={14} className={s <= 4 ? "fill-yellow-400 text-yellow-400" : "text-gray-200"} />
+                  <Star
+                    key={s}
+                    size={14}
+                    className={s <= Math.round(companyStats.averageRating ?? 0) ? "fill-yellow-400 text-yellow-400" : "text-gray-200"}
+                  />
                 ))}
               </div>
-              <p className="text-xs text-gray-500 mt-1">256 đánh giá tổng</p>
+              <p className="text-xs text-gray-500 mt-1">{companyStats.reviewCount} đánh giá tổng</p>
             </div>
             <div className="bg-white rounded-2xl border border-pink-100 p-5">
               <div className="flex items-center gap-2 mb-2">
                 <Clock size={18} className="text-blue-500" />
                 <span className="font-semibold text-gray-700">Thời gian phản hồi</span>
               </div>
-              <p className="text-3xl font-bold text-gray-900">15 phút</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {companyStats.avgResponseMinutes != null ? `${companyStats.avgResponseMinutes} phút` : "--"}
+              </p>
               <p className="text-xs text-gray-500 mt-1">Trung bình thời gian đến nơi</p>
             </div>
             <div className="bg-white rounded-2xl border border-pink-100 p-5">
@@ -851,7 +1127,9 @@ export default function CompanyDashboard() {
                 <Users size={18} className="text-pink-500" />
                 <span className="font-semibold text-gray-700">Tỷ lệ hài lòng</span>
               </div>
-              <p className="text-3xl font-bold text-gray-900">96%</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {companyStats.satisfactionRate != null ? `${companyStats.satisfactionRate}%` : "--"}
+              </p>
               <p className="text-xs text-gray-500 mt-1">Dựa trên phản hồi khách hàng</p>
             </div>
           </div>
