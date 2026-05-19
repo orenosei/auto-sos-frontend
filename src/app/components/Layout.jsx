@@ -120,7 +120,7 @@ export function Layout({ children }) {
                       <div className="w-8 h-8 bg-linear-to-br from-pink-400 to-blue-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
                         {currentUser?.avatar || "U"}
                       </div>
-                      <span className="hidden sm:block text-sm font-medium text-gray-700 max-w-[120px] truncate">
+                      <span className="hidden sm:block text-sm font-medium text-gray-700 max-w-30 truncate">
                         {currentUser?.name}
                       </span>
                       <ChevronDown className="w-4 h-4 text-gray-500" />

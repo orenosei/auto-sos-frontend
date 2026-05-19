@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Car,
   Bell,
   CheckCircle2,
   Clock,
   XCircle,
+  X,
   Star,
   Phone,
   MapPin,
@@ -33,6 +34,8 @@ import { getRequests, getRequestServices, updateRequestStatus } from "../api/req
 import { getUser } from "../api/users";
 import { createVehicle, deleteVehicle, getVehicles, updateVehicle } from "../api/vehicles";
 import { toUiRequest } from "../api/mappers";
+import { getRequestMessages, addRequestMessage, markMessageSeen } from "../api/messages";
+import { useToast } from "../components/ui/toast";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const statusConfig = {
@@ -86,6 +89,13 @@ export default function CompanyDashboard() {
   const [savingService, setSavingService] = useState(false);
   const [requests, setRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
+  const [messageOpen, setMessageOpen] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [messageInput, setMessageInput] = useState("");
+  const messageTimerRef = useRef(null);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState({});
+  const toast = useToast();
   const [vehicles, setVehicles] = useState([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
   const [etaMinutes, setEtaMinutes] = useState("20");
@@ -239,7 +249,18 @@ export default function CompanyDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, isLoggedIn]);
 
+  // Cleanup polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (messageTimerRef.current) {
+        clearInterval(messageTimerRef.current);
+        messageTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const handleStatusUpdate = async (req, next, extra = {}) => {
+    setStatusUpdating((s) => ({ ...s, [req.id]: true }));
     try {
       await updateRequestStatus(req.id, next, {
         changed_by: "company",
@@ -250,9 +271,13 @@ export default function CompanyDashboard() {
         const vehicleRows = await getVehicles(companyId);
         setVehicles(Array.isArray(vehicleRows) ? vehicleRows : []);
       }
+      try { toast.push({ title: 'Cập nhật', description: 'Cập nhật trạng thái thành công', type: 'success' }); } catch {}
     } catch (e) {
       console.error(e);
+      try { toast.push({ title: 'Lỗi', description: e?.message ?? 'Cập nhật trạng thái thất bại', type: 'error' }); } catch {}
       window.alert(e instanceof Error ? e.message : "Cập nhật trạng thái thất bại");
+    } finally {
+      setStatusUpdating((s) => ({ ...s, [req.id]: false }));
     }
   };
 
@@ -456,6 +481,44 @@ export default function CompanyDashboard() {
       console.error(e);
       window.alert(e instanceof Error ? e.message : "Xóa phương tiện thất bại");
     }
+  };
+
+  // Chat handlers for company side
+  const openMessageModal = async (req) => {
+    if (!req) return;
+    setSelectedReq(req);
+    setMessageOpen(true);
+    try {
+      const msgs = await getRequestMessages(req.id);
+      setMessages(msgs);
+      // mark user messages as seen
+      msgs.forEach((m) => {
+        if (m.message_sender === "user" && !m.is_seen) {
+          markMessageSeen(req.id, m.message_id).catch(() => {});
+        }
+      });
+    } catch (e) {
+      console.error(e);
+    }
+
+    if (messageTimerRef.current) clearInterval(messageTimerRef.current);
+    messageTimerRef.current = setInterval(async () => {
+      try {
+        const msgs = await getRequestMessages(req.id);
+        setMessages(msgs);
+      } catch (e) {
+        // ignore
+      }
+    }, 3000);
+  };
+
+  const closeMessageModal = () => {
+    setMessageOpen(false);
+    if (messageTimerRef.current) {
+      clearInterval(messageTimerRef.current);
+      messageTimerRef.current = null;
+    }
+    setMessageInput("");
   };
 
   const tabs = [
@@ -679,6 +742,7 @@ export default function CompanyDashboard() {
                         <select
                           value={selectedVehicleId}
                           onChange={(e) => setSelectedVehicleId(e.target.value)}
+                          disabled={!!statusUpdating[selectedReq.id]}
                           className="mt-1 w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
                         >
                           <option value="">Chưa chọn xe</option>
@@ -696,6 +760,7 @@ export default function CompanyDashboard() {
                           min="1"
                           value={etaMinutes}
                           onChange={(e) => setEtaMinutes(e.target.value)}
+                          disabled={!!statusUpdating[selectedReq.id]}
                           className="mt-1 w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
                         />
                       </div>
@@ -708,38 +773,42 @@ export default function CompanyDashboard() {
                             note: "Company accepted request",
                           });
                         }}
-                        className="w-full bg-linear-to-r from-blue-500 to-blue-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md hover:shadow-blue-200 transition-all flex items-center justify-center gap-2"
+                        disabled={!!statusUpdating[selectedReq.id]}
+                        className="w-full bg-linear-to-r from-blue-500 to-blue-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md hover:shadow-blue-200 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        <CheckCircle2 size={16} />
-                        Tiếp nhận yêu cầu
+                        {statusUpdating[selectedReq.id] ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                        {statusUpdating[selectedReq.id] ? "Đang xử lý..." : "Tiếp nhận yêu cầu"}
                       </button>
                     </div>
                   )}
                   {selectedReq.status === "accepted" && (
                     <button
                       onClick={() => handleStatusUpdate(selectedReq, "heading", { note: "Vehicle is heading to customer" })}
-                      className="w-full bg-linear-to-r from-indigo-500 to-indigo-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2"
+                      disabled={!!statusUpdating[selectedReq.id]}
+                      className="w-full bg-linear-to-r from-indigo-500 to-indigo-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <Loader2 size={16} />
-                      Bắt đầu di chuyển
+                      {statusUpdating[selectedReq.id] ? <Loader2 size={16} className="animate-spin" /> : <Loader2 size={16} />}
+                      {statusUpdating[selectedReq.id] ? "Đang xử lý..." : "Bắt đầu di chuyển"}
                     </button>
                   )}
                   {selectedReq.status === "heading" && (
                     <button
                       onClick={() => handleStatusUpdate(selectedReq, "arrived", { note: "Vehicle arrived" })}
-                      className="w-full bg-linear-to-r from-cyan-500 to-cyan-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2"
+                      disabled={!!statusUpdating[selectedReq.id]}
+                      className="w-full bg-linear-to-r from-cyan-500 to-cyan-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <MapPin size={16} />
-                      Đã đến hiện trường
+                      {statusUpdating[selectedReq.id] ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} />}
+                      {statusUpdating[selectedReq.id] ? "Đang xử lý..." : "Đã đến hiện trường"}
                     </button>
                   )}
                   {selectedReq.status === "arrived" && (
                     <button
                       onClick={() => handleStatusUpdate(selectedReq, "processing", { note: "Started processing incident" })}
-                      className="w-full bg-linear-to-r from-purple-500 to-purple-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2"
+                      disabled={!!statusUpdating[selectedReq.id]}
+                      className="w-full bg-linear-to-r from-purple-500 to-purple-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <Loader2 size={16} />
-                      Bắt đầu xử lý
+                      {statusUpdating[selectedReq.id] ? <Loader2 size={16} className="animate-spin" /> : <Loader2 size={16} />}
+                      {statusUpdating[selectedReq.id] ? "Đang xử lý..." : "Bắt đầu xử lý"}
                     </button>
                   )}
                   {selectedReq.status === "processing" && (
@@ -762,15 +831,16 @@ export default function CompanyDashboard() {
                             note: "Request completed",
                           });
                         }}
-                        className="w-full bg-linear-to-r from-green-500 to-green-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2"
+                        disabled={!!statusUpdating[selectedReq.id]}
+                        className="w-full bg-linear-to-r from-green-500 to-green-400 text-white py-2.5 rounded-xl text-sm font-semibold hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        <CheckCircle2 size={16} />
-                        Xác nhận hoàn tất
+                        {statusUpdating[selectedReq.id] ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                        {statusUpdating[selectedReq.id] ? "Đang xử lý..." : "Xác nhận hoàn tất"}
                       </button>
                     </div>
                   )}
                   <div className="flex gap-2">
-                    <button className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-blue-200 text-blue-600 text-sm hover:bg-blue-50 transition-colors">
+                    <button onClick={() => openMessageModal(selectedReq)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-blue-200 text-blue-600 text-sm hover:bg-blue-50 transition-colors">
                       <MessageCircle size={15} />
                       Nhắn tin
                     </button>
@@ -786,10 +856,11 @@ export default function CompanyDashboard() {
                         cancel_reason: "Company rejected request",
                         note: "Company rejected request",
                       })}
-                      className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-red-200 text-red-500 text-sm hover:bg-red-50 transition-colors"
+                      disabled={!!statusUpdating[selectedReq.id]}
+                      className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-red-200 text-red-500 text-sm hover:bg-red-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <XCircle size={15} />
-                      Từ chối
+                      {statusUpdating[selectedReq.id] ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={15} />}
+                      {statusUpdating[selectedReq.id] ? "Đang xử lý..." : "Từ chối"}
                     </button>
                   )}
                 </div>
@@ -800,6 +871,53 @@ export default function CompanyDashboard() {
                 <p className="text-gray-400 text-sm">Chọn một yêu cầu để xem chi tiết</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Message modal for company */}
+      {messageOpen && selectedReq && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-4 w-full max-w-lg shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold">Chat với {selectedReq.userName || 'khách hàng'}</h3>
+              <button onClick={() => closeMessageModal()} className="text-gray-400 hover:text-gray-600"><X /></button>
+            </div>
+
+            <div className="h-64 overflow-auto mb-3 p-2 border rounded-lg bg-gray-50" id="company-messages-scroll">
+              {messages.map((m) => (
+                <div key={m.message_id} className={`mb-2 p-2 rounded-lg ${m.message_sender === 'company' ? 'bg-blue-50 self-end text-right' : 'bg-white'}`}>
+                  <div className="text-xs text-gray-500 mb-1">{m.message_sender}</div>
+                  <div className="text-sm text-gray-800">{m.message_content}</div>
+                  <div className="text-xs text-gray-400 mt-1">{new Date(m.sent_at).toLocaleTimeString()}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <input value={messageInput} onChange={(e) => setMessageInput(e.target.value)} placeholder="Nhập tin nhắn..." className="flex-1 px-3 py-2 border rounded-xl" />
+              <button
+                onClick={async () => {
+                  if (!messageInput.trim() || sendingMessage) return;
+                  setSendingMessage(true);
+                  try {
+                    const created = await addRequestMessage(selectedReq.id, { message_sender: 'company', message_content: messageInput });
+                    setMessages((prev) => [...prev, created]);
+                    setMessageInput('');
+                      try { toast.push({ title: 'Đã gửi', description: 'Tin nhắn đã được gửi', type: 'success' }); } catch {}
+                  } catch (e) {
+                    console.error(e);
+                      try { toast.push({ title: 'Lỗi', description: e?.message ?? 'Gửi tin nhắn thất bại', type: 'error' }); } catch {}
+                  } finally {
+                    setSendingMessage(false);
+                  }
+                }}
+                disabled={sendingMessage}
+                className="px-4 py-2 bg-blue-600 text-white rounded-xl disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {sendingMessage ? <Loader2 size={14} className="animate-spin" /> : "Gửi"}
+              </button>
+            </div>
           </div>
         </div>
       )}

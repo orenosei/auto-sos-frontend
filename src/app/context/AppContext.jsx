@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { mockNotifications } from "../data/mockData";
 import { loginCompany, loginUser, registerCompany, registerUser } from "../api/auth";
 import { toUiUser } from "../api/mappers";
+import { getNotifications, markNotificationRead } from "../api/notifications";
 
 const AppContext = createContext(undefined);
 
@@ -28,6 +29,46 @@ export function AppProvider({ children }) {
       // ignore
     }
   }, []);
+
+  // Poll notifications when logged in
+  useEffect(() => {
+    let mounted = true;
+    let timer = null;
+
+    const load = async () => {
+      if (!isLoggedIn || !currentUser) return;
+      try {
+        const recipientType = currentRole === 'company' ? 'company' : 'user';
+        const data = await getNotifications(recipientType, currentUser.id);
+        if (!mounted) return;
+        setNotifications((prev) => {
+          // map to local shape { id, title, message, read, createdAt }
+          const mapped = (data ?? []).map((n) => ({
+            id: String(n.notification_id),
+            title: n.title,
+            message: n.message,
+            read: !!n.is_read,
+            createdAt: n.created_at,
+            requestId: n.request_id,
+            type: n.notification_type,
+          }));
+          return mapped;
+        });
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    if (isLoggedIn) {
+      load();
+      timer = setInterval(load, 5000);
+    }
+
+    return () => {
+      mounted = false;
+      if (timer) clearInterval(timer);
+    };
+  }, [isLoggedIn, currentUser, currentRole]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -126,12 +167,17 @@ export function AppProvider({ children }) {
 
   const markAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    // Optionally mark on server (best-effort)
+    notifications.forEach((n) => {
+      if (!n.read) markNotificationRead(n.id).catch(() => {});
+    });
   };
 
   const markRead = (id) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
+    markNotificationRead(id).catch(() => {});
   };
 
   return (
