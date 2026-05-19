@@ -25,7 +25,7 @@ import {
 import { useApp } from "../context/AppContext";
 import { getCompanies, getCompanyServices, getNearbyCompanies } from "../api/companies";
 import { getServices } from "../api/services";
-import { addRequestService, createRequest, getRequestServices, getRequests } from "../api/requests";
+import { createRequest, getRequestServices, getRequests, updateRequestStatus } from "../api/requests";
 import { addRequestImage, uploadRequestImageToCloudinary } from "../api/requestImages";
 import { toUiCompany, toUiRequest, toUiService } from "../api/mappers";
 import { reverseGeocode, formatAddress, calculateDistance, calculateETA } from "../utils/gpsUtils";
@@ -33,10 +33,14 @@ import { reverseGeocode, formatAddress, calculateDistance, calculateETA } from "
 const statusConfig = {
   pending: { label: "Chờ tiếp nhận", color: "text-yellow-600 bg-yellow-50 border-yellow-200", icon: <Clock size={14} /> },
   accepted: { label: "Đã tiếp nhận", color: "text-blue-600 bg-blue-50 border-blue-200", icon: <AlertCircle size={14} /> },
-  in_progress: { label: "Đang xử lý", color: "text-purple-600 bg-purple-50 border-purple-200", icon: <Loader2 size={14} className="animate-spin" /> },
+  heading: { label: "Đang di chuyển", color: "text-indigo-600 bg-indigo-50 border-indigo-200", icon: <Navigation size={14} /> },
+  arrived: { label: "Đã đến nơi", color: "text-cyan-600 bg-cyan-50 border-cyan-200", icon: <MapPin size={14} /> },
+  processing: { label: "Đang xử lý", color: "text-purple-600 bg-purple-50 border-purple-200", icon: <Loader2 size={14} className="animate-spin" /> },
   completed: { label: "Hoàn tất", color: "text-green-600 bg-green-50 border-green-200", icon: <CheckCircle2 size={14} /> },
   cancelled: { label: "Đã hủy", color: "text-gray-500 bg-gray-50 border-gray-200", icon: <XCircle size={14} /> },
 };
+
+const activeStatuses = new Set(["accepted", "heading", "arrived", "processing"]);
 
 const serviceIconMap = {
   "Vá lốp / Thay lốp": <Wrench size={20} className="text-pink-500" />,
@@ -118,9 +122,7 @@ export default function UserDashboard() {
     { key: "requests", label: "Yêu cầu của tôi", icon: <Car size={16} /> },
   ];
 
-  const activeRequest = userRequests.find(
-    (r) => r.status === "in_progress" || r.status === "accepted"
-  );
+  const activeRequest = userRequests.find((r) => activeStatuses.has(r.status));
 
   const refreshRequests = async (companyNameById) => {
     if (!userId) {
@@ -135,9 +137,11 @@ export default function UserDashboard() {
       const mapped = await Promise.all(
         backend.map(async (r) => {
           let serviceType = "";
+          let servicePrice = null;
           try {
             const svc = await getRequestServices(r.request_id);
             serviceType = svc.data?.[0]?.service_name ?? "";
+            servicePrice = svc.data?.[0]?.service_price ?? null;
           } catch {
             // ignore
           }
@@ -150,6 +154,7 @@ export default function UserDashboard() {
             userPhone: currentUser?.phone ?? "",
             companyName,
             serviceType,
+            servicePrice,
           });
         })
       );
@@ -263,6 +268,22 @@ export default function UserDashboard() {
     for (const s of services) map.set(s.name, s);
     return map;
   }, [services]);
+
+  const selectedCompany = useMemo(
+    () => companies.find((c) => String(c.id) === String(newReq.selectedCompanyId)),
+    [companies, newReq.selectedCompanyId]
+  );
+
+  const selectedCompanyService = useMemo(() => {
+    if (!selectedCompany || !newReq.serviceType) return null;
+    return selectedCompany.serviceDetails?.find((s) => s.name === newReq.serviceType) ?? null;
+  }, [selectedCompany, newReq.serviceType]);
+
+  const availableRequestServices = useMemo(() => {
+    const names = new Set((selectedCompany?.serviceDetails ?? []).map((s) => s.name));
+    if (names.size === 0) return [];
+    return services.filter((s) => names.has(s.name));
+  }, [selectedCompany, services]);
 
   const { latitude, longitude, selectedCompanyId } = newReq;
 
@@ -410,6 +431,8 @@ export default function UserDashboard() {
     }
 
     const companyId = newReq.selectedCompanyId ? Number(newReq.selectedCompanyId) : null;
+    const pickedService = requestServiceByName.get(newReq.serviceType);
+    const serviceId = pickedService ? Number(pickedService.id) : null;
 
     const created = await createRequest({
       user_id: userId,
@@ -417,23 +440,15 @@ export default function UserDashboard() {
       absolute_location: { lat, lng },
       relative_location: newReq.location,
       request_description: newReq.description,
+      issue_type: newReq.serviceType,
+      priority: "normal",
+      service_id: Number.isFinite(serviceId) ? serviceId : null,
+      service_quantity: 1,
+      service_price:
+        selectedCompanyService && Number.isFinite(selectedCompanyService.price)
+          ? selectedCompanyService.price
+          : null,
     });
-
-    const pickedService = requestServiceByName.get(newReq.serviceType);
-    if (pickedService) {
-      const serviceId = Number(pickedService.id);
-      if (Number.isFinite(serviceId)) {
-        try {
-          await addRequestService(created.request_id, {
-            service_id: serviceId,
-            service_quantity: 1,
-            service_price: 0,
-          });
-        } catch (e) {
-          console.error(e);
-        }
-      }
-    }
 
     if (Array.isArray(newReq.imageUrls) && newReq.imageUrls.length > 0) {
       for (const imageUrl of newReq.imageUrls) {
@@ -447,6 +462,24 @@ export default function UserDashboard() {
 
     const mapName = new Map(companies.map((c) => [c.id, c.name]));
     await refreshRequests(mapName);
+  };
+
+  const cancelRequest = async (request) => {
+    const reason = window.prompt("Lý do hủy yêu cầu (không bắt buộc):", "");
+    try {
+      await updateRequestStatus(request.id, "cancelled", {
+        cancelled_by: "user",
+        cancel_reason: reason || null,
+        changed_by: "user",
+        note: reason || "User cancelled request",
+      });
+      const mapName = new Map(companies.map((c) => [c.id, c.name]));
+      await refreshRequests(mapName);
+      setSelectedRequest((prev) => (prev?.id === request.id ? { ...prev, status: "cancelled" } : prev));
+    } catch (e) {
+      console.error(e);
+      window.alert(e instanceof Error ? e.message : "Hủy yêu cầu thất bại");
+    }
   };
 
   return (
@@ -469,7 +502,7 @@ export default function UserDashboard() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         {[
           { label: "Tổng yêu cầu", value: userRequests.length, color: "from-pink-100 to-pink-50", text: "text-pink-600" },
-          { label: "Đang xử lý", value: userRequests.filter((r) => r.status === "in_progress" || r.status === "accepted").length, color: "from-purple-100 to-purple-50", text: "text-purple-600" },
+          { label: "Đang xử lý", value: userRequests.filter((r) => activeStatuses.has(r.status)).length, color: "from-purple-100 to-purple-50", text: "text-purple-600" },
           { label: "Hoàn tất", value: userRequests.filter((r) => r.status === "completed").length, color: "from-green-100 to-green-50", text: "text-green-600" },
           { label: "Đã hủy", value: userRequests.filter((r) => r.status === "cancelled").length, color: "from-gray-100 to-gray-50", text: "text-gray-600" },
         ].map((s, i) => (
@@ -514,7 +547,7 @@ export default function UserDashboard() {
             </div>
           ) : (
             userRequests.map((req) => {
-              const status = statusConfig[req.status];
+              const status = statusConfig[req.status] ?? statusConfig.pending;
               return (
                 <div
                   key={req.id}
@@ -673,7 +706,13 @@ export default function UserDashboard() {
             <div>
               <h2 className="text-lg font-bold text-gray-800 mb-4">Chọn loại sự cố</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {services.map((s) => (
+                {availableRequestServices.map((s) => {
+                  const companyService = selectedCompany?.serviceDetails?.find((x) => x.name === s.name);
+                  const servicePrice =
+                    companyService && Number.isFinite(companyService.price)
+                      ? `${companyService.price.toLocaleString("vi-VN")}đ`
+                      : s.price;
+                  return (
                   <button
                     key={s.id}
                     onClick={() => setNewReq({ ...newReq, serviceType: s.name })}
@@ -685,10 +724,16 @@ export default function UserDashboard() {
                   >
                     <div className="text-2xl mb-2">{s.icon}</div>
                     <p className="text-sm font-medium text-gray-800 leading-tight">{s.name}</p>
-                    <p className="text-xs text-gray-400 mt-1">{s.price}</p>
+                    <p className="text-xs text-gray-400 mt-1">{servicePrice}</p>
                   </button>
-                ))}
+                  );
+                })}
               </div>
+              {availableRequestServices.length === 0 && (
+                <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-700">
+                  Công ty này chưa khai báo dịch vụ. Hãy chọn công ty khác hoặc yêu cầu công ty cập nhật dịch vụ.
+                </div>
+              )}
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setNewReq({ ...newReq, step: 1 })}
@@ -727,6 +772,11 @@ export default function UserDashboard() {
                   <div className="flex items-center gap-2 bg-pink-50 px-4 py-2.5 rounded-xl border border-pink-200">
                     {serviceIconMap[newReq.serviceType]}
                     <span className="text-sm font-medium text-pink-700">{newReq.serviceType}</span>
+                    {selectedCompanyService && Number.isFinite(selectedCompanyService.price) && (
+                      <span className="ml-auto text-sm font-semibold text-pink-700">
+                        {selectedCompanyService.price.toLocaleString("vi-VN")}đ
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div>
@@ -863,7 +913,7 @@ export default function UserDashboard() {
                 userRequests
                   .filter((r) => r.status !== "completed" && r.status !== "cancelled")
                   .map((req) => {
-                    const status = statusConfig[req.status];
+                    const status = statusConfig[req.status] ?? statusConfig.pending;
                     return (
                       <button
                         key={req.id}
@@ -896,9 +946,9 @@ export default function UserDashboard() {
               <div className="bg-white rounded-2xl border border-pink-100 p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="font-bold text-gray-900">Chi tiết yêu cầu</h2>
-                  <span className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border ${statusConfig[selectedRequest.status].color}`}>
-                    {statusConfig[selectedRequest.status].icon}
-                    {statusConfig[selectedRequest.status].label}
+                  <span className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border ${(statusConfig[selectedRequest.status] ?? statusConfig.pending).color}`}>
+                    {(statusConfig[selectedRequest.status] ?? statusConfig.pending).icon}
+                    {(statusConfig[selectedRequest.status] ?? statusConfig.pending).label}
                   </span>
                 </div>
 
@@ -906,8 +956,10 @@ export default function UserDashboard() {
                 <div className="space-y-3 mb-4">
                   {[
                     { label: "Gửi yêu cầu", done: true, time: new Date(selectedRequest.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) },
-                    { label: "Tiếp nhận bởi " + (selectedRequest.companyName || "..."), done: selectedRequest.status !== "pending", time: selectedRequest.companyName ? "Đã tiếp nhận" : "" },
-                    { label: "Kỹ thuật viên đang đến", done: selectedRequest.status === "in_progress" || selectedRequest.status === "completed", time: selectedRequest.estimatedTime ? `~${selectedRequest.estimatedTime} phút` : "" },
+                    { label: "Tiếp nhận bởi " + (selectedRequest.companyName || "..."), done: selectedRequest.status !== "pending", time: selectedRequest.acceptedAt ? new Date(selectedRequest.acceptedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "" },
+                    { label: "Xe cứu hộ đang đến", done: ["heading", "arrived", "processing", "completed"].includes(selectedRequest.status), time: selectedRequest.estimatedTime != null ? `~${selectedRequest.estimatedTime} phút` : "" },
+                    { label: "Đã đến hiện trường", done: ["arrived", "processing", "completed"].includes(selectedRequest.status), time: selectedRequest.arrivedAt ? new Date(selectedRequest.arrivedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "" },
+                    { label: "Đang xử lý sự cố", done: ["processing", "completed"].includes(selectedRequest.status), time: "" },
                     { label: "Hoàn tất dịch vụ", done: selectedRequest.status === "completed", time: selectedRequest.status === "completed" ? new Date(selectedRequest.updatedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "" },
                   ].map((t, i) => (
                     <div key={i} className="flex items-start gap-3">
@@ -952,7 +1004,7 @@ export default function UserDashboard() {
                 )}
 
                 {/* Actions */}
-                {(selectedRequest.status === "pending" || selectedRequest.status === "accepted") && (
+                {selectedRequest.status !== "completed" && selectedRequest.status !== "cancelled" && (
                   <div className="flex gap-3 mt-4">
                     <button className="flex-1 flex items-center justify-center gap-2 bg-blue-50 text-blue-600 py-2.5 rounded-xl text-sm font-medium hover:bg-blue-100 transition-colors">
                       <MessageCircle size={16} />
@@ -963,7 +1015,10 @@ export default function UserDashboard() {
                       Gọi điện
                     </button>
                     {selectedRequest.status === "pending" && (
-                      <button className="flex-1 flex items-center justify-center gap-2 bg-red-50 text-red-500 py-2.5 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors">
+                      <button
+                        onClick={() => cancelRequest(selectedRequest)}
+                        className="flex-1 flex items-center justify-center gap-2 bg-red-50 text-red-500 py-2.5 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors"
+                      >
                         <XCircle size={16} />
                         Hủy
                       </button>

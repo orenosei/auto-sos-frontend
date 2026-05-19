@@ -11,26 +11,37 @@ export async function getRequests(params) {
 }
 
 export async function createRequest(input) {
+  const body = {
+    user_id: input.user_id ?? null,
+    company_id: input.company_id ?? null,
+    vehicle_id: input.vehicle_id ?? null,
+    absolute_location: { lat: input.absolute_location.lat, lng: input.absolute_location.lng },
+    relative_location: input.relative_location ?? null,
+    request_description: input.request_description ?? null,
+    issue_type: input.issue_type ?? null,
+    priority: input.priority ?? null,
+    service_id: input.service_id ?? null,
+    service_quantity: input.service_quantity ?? 1,
+    service_price: input.service_price ?? null,
+  };
+
   const res = await apiRequest("/api/requests", {
     method: "POST",
-    body: {
-      user_id: input.user_id ?? null,
-      company_id: input.company_id ?? null,
-      vehicle_id: input.vehicle_id ?? null,
-      absolute_location: { lat: input.absolute_location.lat, lng: input.absolute_location.lng },
-      relative_location: input.relative_location ?? null,
-      request_description: input.request_description ?? null,
-    },
+    body,
   });
   return res.data;
 }
 
-export async function updateRequestStatus(requestId, status) {
+export async function updateRequest(requestId, payload) {
   const res = await apiRequest(`/api/requests/${requestId}`, {
     method: "PUT",
-    body: { request_status: status },
+    body: payload,
   });
   return res.data;
+}
+
+export async function updateRequestStatus(requestId, status, payload = {}) {
+  return updateRequest(requestId, { ...payload, request_status: status });
 }
 
 export async function addRequestService(requestId, input) {

@@ -13,11 +13,9 @@ import {
   Trash2,
   AlertTriangle,
   Star,
-  Clock,
 } from "lucide-react";
-import { adminStats } from "../data/mockData";
-import { getUsers } from "../api/users";
-import { getCompanies } from "../api/companies";
+import { deleteUser, getUsers, updateUser } from "../api/users";
+import { getCompanies, updateCompany } from "../api/companies";
 import { getRequests, getRequestServices } from "../api/requests";
 import { toUiRequest } from "../api/mappers";
 import {
@@ -39,7 +37,9 @@ const PIE_COLORS = ["#f472b6", "#60a5fa", "#a78bfa", "#fb923c", "#34d399"];
 const statusConfig = {
   pending: { label: "Chờ tiếp nhận", color: "text-yellow-600 bg-yellow-50 border-yellow-200" },
   accepted: { label: "Đã tiếp nhận", color: "text-blue-600 bg-blue-50 border-blue-200" },
-  in_progress: { label: "Đang xử lý", color: "text-purple-600 bg-purple-50 border-purple-200" },
+  heading: { label: "Đang di chuyển", color: "text-indigo-600 bg-indigo-50 border-indigo-200" },
+  arrived: { label: "Đã đến nơi", color: "text-cyan-600 bg-cyan-50 border-cyan-200" },
+  processing: { label: "Đang xử lý", color: "text-purple-600 bg-purple-50 border-purple-200" },
   completed: { label: "Hoàn tất", color: "text-green-600 bg-green-50 border-green-200" },
   cancelled: { label: "Đã hủy", color: "text-gray-500 bg-gray-50 border-gray-200" },
 };
@@ -60,16 +60,60 @@ export default function AdminDashboard() {
     const totalRequests = requests.length;
     const completedRequests = requests.filter((r) => r.status === "completed").length;
     const pendingRequests = requests.filter((r) => r.status === "pending").length;
+    const activeUsers = users.filter((u) => u.isActive).length;
+    const totalRevenue = requests.reduce((sum, r) => sum + (Number(r.finalPrice ?? r.servicePrice) || 0), 0);
+    const completionRate =
+      totalRequests === 0 ? 0 : Math.round((completedRequests / totalRequests) * 100);
 
     return {
       totalUsers,
+      activeUsers,
       totalCompanies,
       verifiedCompanies,
       totalRequests,
       completedRequests,
       pendingRequests,
+      totalRevenue,
+      completionRate,
     };
   }, [users, companies, requests]);
+
+  const monthlyData = useMemo(() => {
+    const buckets = new Map();
+    for (let month = 1; month <= 12; month += 1) {
+      buckets.set(month, { month: `Th.${month}`, requests: 0, completed: 0 });
+    }
+
+    for (const request of requests) {
+      const date = new Date(request.createdAt);
+      if (!Number.isFinite(date.getTime())) continue;
+      const bucket = buckets.get(date.getMonth() + 1);
+      if (!bucket) continue;
+      bucket.requests += 1;
+      if (request.status === "completed") bucket.completed += 1;
+    }
+
+    return Array.from(buckets.values());
+  }, [requests]);
+
+  const serviceDistribution = useMemo(() => {
+    const counts = new Map();
+    for (const request of requests) {
+      const key = request.serviceType || "Khác";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    const total = Array.from(counts.values()).reduce((sum, value) => sum + value, 0);
+    if (total === 0) return [];
+
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, count]) => ({
+        name,
+        value: Math.round((count / total) * 100),
+      }));
+  }, [requests]);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +128,8 @@ export default function AdminDashboard() {
           name: x.full_name || x.user_name,
           email: x.user_email ?? "",
           phone: x.user_phone,
+          role: x.user_role ?? "user",
+          isActive: x.is_active !== false,
           createdAt: x.registered_at,
         }));
         setUsers(uiUsers);
@@ -109,9 +155,11 @@ export default function AdminDashboard() {
             const backend = await getRequests({ company_id: co.id });
             for (const r of backend) {
               let serviceType = "";
+              let servicePrice = null;
               try {
                 const svc = await getRequestServices(r.request_id);
                 serviceType = svc.data?.[0]?.service_name ?? "";
+                servicePrice = svc.data?.[0]?.service_price ?? null;
               } catch {
                 // ignore
               }
@@ -123,6 +171,7 @@ export default function AdminDashboard() {
                 userPhone: urow?.phone ?? "",
                 companyName: r.company_id != null ? companyNameById.get(String(r.company_id)) : undefined,
                 serviceType,
+                servicePrice,
               });
 
               requestsById.set(mapped.id, mapped);
@@ -154,6 +203,49 @@ export default function AdminDashboard() {
     { key: "requests", label: "Yêu cầu", icon: <Car size={16} /> },
     { key: "content", label: "Kiểm duyệt", icon: <ShieldCheck size={16} /> },
   ];
+
+  const handleToggleUserActive = async (user) => {
+    try {
+      const updated = await updateUser(user.id, { is_active: !user.isActive });
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === user.id
+            ? { ...u, isActive: updated.is_active !== false, role: updated.user_role ?? u.role }
+            : u
+        )
+      );
+    } catch (e) {
+      console.error(e);
+      window.alert(e instanceof Error ? e.message : "Cập nhật tài khoản thất bại");
+    }
+  };
+
+  const handleDeleteUser = async (user) => {
+    const ok = window.confirm(`Xóa tài khoản "${user.name}"?`);
+    if (!ok) return;
+
+    try {
+      await deleteUser(user.id);
+      setUsers((prev) => prev.filter((u) => u.id !== user.id));
+    } catch (e) {
+      console.error(e);
+      window.alert(e instanceof Error ? e.message : "Xóa tài khoản thất bại");
+    }
+  };
+
+  const handleToggleCompanyVerified = async (company) => {
+    try {
+      const updated = await updateCompany(company.id, { is_verified: !company.verified });
+      setCompanies((prev) =>
+        prev.map((c) =>
+          c.id === company.id ? { ...c, verified: !!updated.is_verified } : c
+        )
+      );
+    } catch (e) {
+      console.error(e);
+      window.alert(e instanceof Error ? e.message : "Cập nhật xác minh thất bại");
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -196,7 +288,7 @@ export default function AdminDashboard() {
               { label: "Tổng yêu cầu", value: computedStats.totalRequests.toLocaleString(), icon: <Car size={20} />, color: "from-pink-100 to-pink-50", text: "text-pink-600", sub: `${computedStats.completedRequests} hoàn tất` },
               { label: "Người dùng", value: computedStats.totalUsers.toLocaleString(), icon: <Users size={20} />, color: "from-blue-100 to-blue-50", text: "text-blue-600", sub: "" },
               { label: "Công ty đối tác", value: computedStats.totalCompanies, icon: <Building2 size={20} />, color: "from-purple-100 to-purple-50", text: "text-purple-600", sub: `${computedStats.verifiedCompanies} đã xác minh` },
-              { label: "Đánh giá TB", value: adminStats.avgRating, icon: <Star size={20} />, color: "from-yellow-100 to-yellow-50", text: "text-yellow-600", sub: "Rất tốt" },
+              { label: "Doanh thu", value: `${Math.round(computedStats.totalRevenue / 1000000).toLocaleString("vi-VN")}M`, icon: <Star size={20} />, color: "from-yellow-100 to-yellow-50", text: "text-yellow-600", sub: "Từ request hoàn tất" },
             ].map((card, i) => (
               <div key={i} className={`bg-linear-to-br ${card.color} rounded-2xl p-5 border border-white shadow-sm`}>
                 <div className={`w-10 h-10 rounded-xl bg-white/60 flex items-center justify-center ${card.text} mb-3`}>
@@ -215,7 +307,7 @@ export default function AdminDashboard() {
             <div className="bg-white rounded-2xl border border-pink-100 p-6">
               <h3 className="font-bold text-gray-900 mb-4">Yêu cầu cứu hộ theo tháng</h3>
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={adminStats.monthlyData} barSize={18}>
+                <BarChart data={monthlyData} barSize={18}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
@@ -232,7 +324,7 @@ export default function AdminDashboard() {
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
                   <Pie
-                    data={adminStats.serviceDistribution}
+                    data={serviceDistribution}
                     cx="50%"
                     cy="50%"
                     innerRadius={55}
@@ -240,7 +332,7 @@ export default function AdminDashboard() {
                     paddingAngle={4}
                     dataKey="value"
                   >
-                    {adminStats.serviceDistribution.map((entry, index) => (
+                    {serviceDistribution.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                     ))}
                   </Pie>
@@ -264,17 +356,12 @@ export default function AdminDashboard() {
                 <div
                   className="bg-linear-to-r from-green-400 to-green-500 h-2.5 rounded-full"
                   style={{
-                    width:
-                      computedStats.totalRequests === 0
-                        ? "0%"
-                        : `${Math.round((computedStats.completedRequests / computedStats.totalRequests) * 100)}%`,
+                    width: `${computedStats.completionRate}%`,
                   }}
                 />
               </div>
               <p className="text-2xl font-bold text-green-600">
-                {computedStats.totalRequests === 0
-                  ? "0%"
-                  : `${Math.round((computedStats.completedRequests / computedStats.totalRequests) * 100)}%`}
+                {computedStats.completionRate}%
               </p>
             </div>
             <div className="bg-white rounded-2xl border border-pink-100 p-5">
@@ -313,7 +400,9 @@ export default function AdminDashboard() {
                 className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
               />
             </div>
-            <span className="text-sm text-gray-500">Tổng: {computedStats.totalUsers.toLocaleString()} người dùng</span>
+            <span className="text-sm text-gray-500">
+              Tổng: {computedStats.totalUsers.toLocaleString()} người dùng · {computedStats.activeUsers} đang hoạt động
+            </span>
           </div>
           <div className="bg-white rounded-2xl border border-pink-100 overflow-hidden">
             <div className="overflow-x-auto">
@@ -323,6 +412,8 @@ export default function AdminDashboard() {
                     <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Người dùng</th>
                     <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Email</th>
                     <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Điện thoại</th>
+                    <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Vai trò</th>
+                    <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Trạng thái</th>
                     <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Ngày tham gia</th>
                     <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Hành động</th>
                   </tr>
@@ -346,6 +437,20 @@ export default function AdminDashboard() {
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">{user.email}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">{user.phone}</td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs px-2 py-0.5 rounded-full border border-purple-200 bg-purple-50 text-purple-600">
+                            {user.role === "admin" ? "Admin" : "User"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                            user.isActive
+                              ? "border-green-200 bg-green-50 text-green-600"
+                              : "border-gray-200 bg-gray-50 text-gray-500"
+                          }`}>
+                            {user.isActive ? "Hoạt động" : "Đã khóa"}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
                           {user.createdAt ? new Date(user.createdAt).toLocaleDateString("vi-VN") : ""}
                         </td>
@@ -354,7 +459,21 @@ export default function AdminDashboard() {
                             <button className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 transition-colors">
                               <Eye size={14} />
                             </button>
-                            <button className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 transition-colors">
+                            <button
+                              onClick={() => handleToggleUserActive(user)}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                user.isActive
+                                  ? "hover:bg-yellow-50 text-yellow-500"
+                                  : "hover:bg-green-50 text-green-500"
+                              }`}
+                              title={user.isActive ? "Khóa tài khoản" : "Mở khóa tài khoản"}
+                            >
+                              {user.isActive ? <ShieldX size={14} /> : <ShieldCheck size={14} />}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(user)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 transition-colors"
+                            >
                               <Trash2 size={14} />
                             </button>
                           </div>
@@ -424,7 +543,10 @@ export default function AdminDashboard() {
                     <div className="flex gap-2">
                       {!company.verified && (
                         <>
-                          <button className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-xl text-xs font-medium hover:bg-green-600 transition-colors">
+                          <button
+                            onClick={() => handleToggleCompanyVerified(company)}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-xl text-xs font-medium hover:bg-green-600 transition-colors"
+                          >
                             <CheckCircle2 size={13} />
                             Xác minh
                           </button>
@@ -433,6 +555,15 @@ export default function AdminDashboard() {
                             Từ chối
                           </button>
                         </>
+                      )}
+                      {company.verified && (
+                        <button
+                          onClick={() => handleToggleCompanyVerified(company)}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-yellow-50 text-yellow-600 border border-yellow-200 rounded-xl text-xs font-medium hover:bg-yellow-100 transition-colors"
+                        >
+                          <ShieldX size={13} />
+                          Bỏ xác minh
+                        </button>
                       )}
                       <button className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-xl text-xs font-medium hover:bg-blue-100 transition-colors">
                         <Eye size={13} />
@@ -494,8 +625,8 @@ export default function AdminDashboard() {
                         <td className="px-4 py-3 text-sm text-gray-600">{req.serviceType}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">{req.companyName || "—"}</td>
                         <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-0.5 rounded-full border ${statusConfig[req.status]?.color}`}>
-                            {statusConfig[req.status]?.label}
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${(statusConfig[req.status] ?? statusConfig.pending).color}`}>
+                            {(statusConfig[req.status] ?? statusConfig.pending).label}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-xs text-gray-400">
