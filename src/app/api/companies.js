@@ -31,6 +31,16 @@ export async function getCompanyServices(companyId) {
   return res.data;
 }
 
+export async function getCompanyReviews(companyId) {
+  const res = await apiRequest(`/api/companies/${companyId}/reviews`);
+  return res.data;
+}
+
+export async function getCompanyRating(companyId) {
+  const res = await apiRequest(`/api/companies/${companyId}/rating`);
+  return res.data;
+}
+
 export async function addCompanyService(companyId, payload) {
   const res = await apiRequest(`/api/companies/${companyId}/services`, {
     method: "POST",

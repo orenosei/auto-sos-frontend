@@ -28,6 +28,8 @@ import {
   getCompanyServices,
   updateCompany,
   updateCompanyService,
+  getCompanyRating,
+  getCompanyReviews,
 } from "../api/companies";
 import { getServices } from "../api/services";
 import { getRequests, getRequestServices, updateRequestStatus } from "../api/requests";
@@ -57,6 +59,7 @@ const weeklyData = [
   { day: "T7", requests: 9, completed: 8 },
   { day: "CN", requests: 7, completed: 6 },
 ];
+
 
 export default function CompanyDashboard() {
   const { currentUser, isLoggedIn, updateCurrentUser } = useApp();
@@ -88,6 +91,28 @@ export default function CompanyDashboard() {
   const [editingServicePrice, setEditingServicePrice] = useState("");
   const [savingService, setSavingService] = useState(false);
   const [requests, setRequests] = useState([]);
+  // Compute chart data (requests + completed) for current week (Mon..Sun) from real requests
+  const chartData = useMemo(() => {
+    // Monday-based week labels
+    const labels = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+    const now = new Date();
+    const day = now.getDay(); // 0 Sun .. 6 Sat
+    const diffToMonday = (day + 6) % 7; // days to subtract to get Monday
+    const monday = new Date(now);
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(now.getDate() - diffToMonday);
+
+    const arr = labels.map((label, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dayStr = d.toDateString();
+      const requestsCount = requests.filter((r) => new Date(r.createdAt).toDateString() === dayStr).length;
+      const completedCount = requests.filter((r) => r.completedAt && new Date(r.completedAt).toDateString() === dayStr).length;
+      return { day: label, requests: requestsCount, completed: completedCount };
+    });
+
+    return arr;
+  }, [requests]);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -97,6 +122,8 @@ export default function CompanyDashboard() {
   const [statusUpdating, setStatusUpdating] = useState({});
   const toast = useToast();
   const [vehicles, setVehicles] = useState([]);
+  const [ratingSummary, setRatingSummary] = useState({ average: null, count: 0 });
+  const [satisfactionRate, setSatisfactionRate] = useState(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
   const [etaMinutes, setEtaMinutes] = useState("20");
   const [finalPrice, setFinalPrice] = useState("");
@@ -129,6 +156,77 @@ export default function CompanyDashboard() {
       // ignore
     }
     return {};
+  };
+
+  const companyStats = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const startOfWeek = new Date(now);
+    const day = now.getDay();
+    const diffToMonday = (day + 6) % 7;
+    startOfWeek.setDate(now.getDate() - diffToMonday);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const todayRequests = requests.filter((r) => {
+      const createdAt = new Date(r.createdAt);
+      return Number.isFinite(createdAt.getTime()) && createdAt >= startOfToday;
+    }).length;
+
+    const activeRequests = requests.filter((r) => ["accepted", "heading", "arrived", "processing"].includes(r.status)).length;
+
+    const completedThisWeek = requests.filter((r) => {
+      if (r.status !== "completed" || !r.completedAt) return false;
+      const completedAt = new Date(r.completedAt);
+      return Number.isFinite(completedAt.getTime()) && completedAt >= startOfWeek;
+    }).length;
+
+    const monthlyRevenue = requests.reduce((total, r) => {
+      if (r.status !== "completed") return total;
+      const completedAt = r.completedAt ? new Date(r.completedAt) : null;
+      if (!completedAt || !Number.isFinite(completedAt.getTime()) || completedAt < startOfMonth) return total;
+      const amount = Number(r.finalPrice ?? r.servicePrice ?? 0);
+      return total + (Number.isFinite(amount) ? amount : 0);
+    }, 0);
+
+    const responseSamples = requests
+      .filter((r) => r.acceptedAt && (r.arrivedAt || r.completedAt))
+      .map((r) => {
+        const acceptedAt = new Date(r.acceptedAt);
+        const endAt = new Date(r.arrivedAt ?? r.completedAt);
+        if (!Number.isFinite(acceptedAt.getTime()) || !Number.isFinite(endAt.getTime())) return null;
+        return Math.max(0, Math.round((endAt.getTime() - acceptedAt.getTime()) / 60000));
+      })
+      .filter((v) => Number.isFinite(v));
+
+    const avgResponseMinutes = responseSamples.length
+      ? Math.round(responseSamples.reduce((sum, v) => sum + v, 0) / responseSamples.length)
+      : null;
+
+    const averageRating = Number.isFinite(ratingSummary.average) ? ratingSummary.average : null;
+    const reviewCount = Number.isFinite(ratingSummary.count) ? ratingSummary.count : 0;
+
+    return {
+      todayRequests,
+      activeRequests,
+      completedThisWeek,
+      monthlyRevenue,
+      avgResponseMinutes,
+      averageRating,
+      reviewCount,
+      satisfactionRate,
+    };
+  }, [requests, ratingSummary.average, ratingSummary.count, satisfactionRate]);
+
+  const formatRevenue = (value) => {
+    if (!Number.isFinite(value) || value <= 0) return "0đ";
+    if (value >= 1000000) {
+      return `${(value / 1000000).toFixed(value >= 10000000 ? 1 : 2).replace(/\.0$/, "")}M`;
+    }
+    return `${Math.round(value).toLocaleString("vi-VN")}đ`;
   };
 
   const companyRequests = requests;
@@ -238,6 +336,24 @@ export default function CompanyDashboard() {
         setEditingServicePrice("");
 
         await refreshRequests();
+        // fetch rating and reviews summary
+        if (companyId) {
+          try {
+            const r = await getCompanyRating(companyId);
+            if (!cancelled && r && r.average_rating != null) {
+              setRatingSummary({ average: Number(r.average_rating), count: Number(r.review_count ?? 0) });
+            }
+            const rev = await getCompanyReviews(companyId);
+            if (!cancelled && Array.isArray(rev)) {
+              const rows = rev;
+              const satisfied = rows.filter((x) => Number(x.review_rating) >= 4).length;
+              const rate = rows.length > 0 ? Math.round((satisfied / rows.length) * 100) : null;
+              setSatisfactionRate(rate);
+            }
+          } catch (err) {
+            // ignore rating errors
+          }
+        }
       } catch (e) {
         console.error(e);
       }
@@ -542,10 +658,16 @@ export default function CompanyDashboard() {
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-0.5">
                 {[1, 2, 3, 4, 5].map((s) => (
-                  <Star key={s} size={12} className={s <= 4 ? "fill-yellow-400 text-yellow-400" : "text-gray-200"} />
+                  <Star
+                    key={s}
+                    size={12}
+                    className={s <= Math.round(companyStats.averageRating ?? 0) ? "fill-yellow-400 text-yellow-400" : "text-gray-200"}
+                  />
                 ))}
               </div>
-              <span className="text-sm text-gray-500">4.8 · 256 đánh giá</span>
+              <span className="text-sm text-gray-500">
+                {(companyStats.averageRating ?? 0).toFixed(1)} · {companyStats.reviewCount} đánh giá
+              </span>
               {companyProfile?.verified && (
                 <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-200 flex items-center gap-1">
                   ✓ Đã xác minh
@@ -565,10 +687,38 @@ export default function CompanyDashboard() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {[
-          { label: "Yêu cầu hôm nay", value: "12", change: "+3", color: "from-pink-100 to-pink-50", text: "text-pink-600", icon: <Bell size={18} /> },
-          { label: "Đang xử lý", value: "3", change: "", color: "from-purple-100 to-purple-50", text: "text-purple-600", icon: <Loader2 size={18} className="animate-spin" /> },
-          { label: "Hoàn tất tuần này", value: "51", change: "+8%", color: "from-green-100 to-green-50", text: "text-green-600", icon: <CheckCircle2 size={18} /> },
-          { label: "Doanh thu tháng", value: "12.5M", change: "+15%", color: "from-blue-100 to-blue-50", text: "text-blue-600", icon: <TrendingUp size={18} /> },
+          {
+            label: "Yêu cầu hôm nay",
+            value: String(companyStats.todayRequests),
+            change: "",
+            color: "from-pink-100 to-pink-50",
+            text: "text-pink-600",
+            icon: <Bell size={18} />,
+          },
+          {
+            label: "Đang xử lý",
+            value: String(companyStats.activeRequests),
+            change: "",
+            color: "from-purple-100 to-purple-50",
+            text: "text-purple-600",
+            icon: <Loader2 size={18} className="animate-spin" />,
+          },
+          {
+            label: "Hoàn tất tuần này",
+            value: String(companyStats.completedThisWeek),
+            change: "",
+            color: "from-green-100 to-green-50",
+            text: "text-green-600",
+            icon: <CheckCircle2 size={18} />,
+          },
+          {
+            label: "Doanh thu tháng",
+            value: formatRevenue(companyStats.monthlyRevenue),
+            change: "",
+            color: "from-blue-100 to-blue-50",
+            text: "text-blue-600",
+            icon: <TrendingUp size={18} />,
+          },
         ].map((card, i) => (
           <div key={i} className={`bg-linear-to-br ${card.color} rounded-2xl p-4 border border-white shadow-sm`}>
             <div className="flex items-center justify-between mb-2">
@@ -927,8 +1077,8 @@ export default function CompanyDashboard() {
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-pink-100 p-6">
             <h3 className="font-bold text-gray-900 mb-4">Yêu cầu theo ngày trong tuần</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={weeklyData} barSize={32}>
+              <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={chartData} barSize={32}>
                 <CartesianGrid key="grid" strokeDasharray="3 3" stroke="#f3f4f6" />
                 <XAxis key="xaxis" dataKey="day" tick={{ fontSize: 12, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                 <YAxis key="yaxis" tick={{ fontSize: 12, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
@@ -948,20 +1098,28 @@ export default function CompanyDashboard() {
                 <Star size={18} className="text-yellow-500" />
                 <span className="font-semibold text-gray-700">Đánh giá</span>
               </div>
-              <p className="text-3xl font-bold text-gray-900">4.8</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {(companyStats.averageRating ?? 0).toFixed(1)}
+              </p>
               <div className="flex items-center gap-0.5 mt-1">
                 {[1, 2, 3, 4, 5].map((s) => (
-                  <Star key={s} size={14} className={s <= 4 ? "fill-yellow-400 text-yellow-400" : "text-gray-200"} />
+                  <Star
+                    key={s}
+                    size={14}
+                    className={s <= Math.round(companyStats.averageRating ?? 0) ? "fill-yellow-400 text-yellow-400" : "text-gray-200"}
+                  />
                 ))}
               </div>
-              <p className="text-xs text-gray-500 mt-1">256 đánh giá tổng</p>
+              <p className="text-xs text-gray-500 mt-1">{companyStats.reviewCount} đánh giá tổng</p>
             </div>
             <div className="bg-white rounded-2xl border border-pink-100 p-5">
               <div className="flex items-center gap-2 mb-2">
                 <Clock size={18} className="text-blue-500" />
                 <span className="font-semibold text-gray-700">Thời gian phản hồi</span>
               </div>
-              <p className="text-3xl font-bold text-gray-900">15 phút</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {companyStats.avgResponseMinutes != null ? `${companyStats.avgResponseMinutes} phút` : "--"}
+              </p>
               <p className="text-xs text-gray-500 mt-1">Trung bình thời gian đến nơi</p>
             </div>
             <div className="bg-white rounded-2xl border border-pink-100 p-5">
@@ -969,7 +1127,9 @@ export default function CompanyDashboard() {
                 <Users size={18} className="text-pink-500" />
                 <span className="font-semibold text-gray-700">Tỷ lệ hài lòng</span>
               </div>
-              <p className="text-3xl font-bold text-gray-900">96%</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {companyStats.satisfactionRate != null ? `${companyStats.satisfactionRate}%` : "--"}
+              </p>
               <p className="text-xs text-gray-500 mt-1">Dựa trên phản hồi khách hàng</p>
             </div>
           </div>
