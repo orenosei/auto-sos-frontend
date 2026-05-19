@@ -14,11 +14,11 @@ import {
   XCircle,
   PhoneCall,
 } from "lucide-react";
-import { mockCompanies } from "../data/mockData";
 import { useApp } from "../context/AppContext";
 import { useGPS } from "../hooks/useGPS";
 import { getNearbyCompanies } from "../api/companies";
 import { getCompanyServices } from "../api/companies";
+import { createRequest, updateRequestStatus } from "../api/requests";
 
 /* ─── Constants ──────────────────────────────────────── */
 const ISSUE_TYPES = [
@@ -54,14 +54,6 @@ const ISSUE_TYPES = [
     bg: "bg-blue-50 border-blue-200 hover:border-blue-400",
     urgency: "medium",
   },
-];
-
-const MOCK_LOCATIONS = [
-  "Đường Phạm Văn Đồng, Q. Bình Thạnh, TP.HCM",
-  "Quốc lộ 1A, Huyện Bình Chánh, TP.HCM",
-  "Xa lộ Hà Nội, TP. Thủ Đức, TP.HCM",
-  "Nguyễn Thị Minh Khai, Q.1, TP.HCM",
-  "Đường Võ Văn Kiệt, Q.5, TP.HCM",
 ];
 
 const URGENCY_LABELS = {
@@ -118,7 +110,7 @@ function LocatingStep() {
 
 /* ─── Main Component ─────────────────────────────────── */
 export function EmergencySOS() {
-  const { emergencyOpen, setEmergencyOpen } = useApp();
+  const { emergencyOpen, setEmergencyOpen, currentUser } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState("idle");
   const [location, setLocation] = useState("");
@@ -128,10 +120,24 @@ export function EmergencySOS() {
   const [nearbyCompanies, setNearbyCompanies] = useState([]);
   const [etaSeconds, setEtaSeconds] = useState(0);
   const [requestId, setRequestId] = useState("");
+  const [creatingRequest, setCreatingRequest] = useState(false);
   const [gpsError, setGpsError] = useState(null);
   const timerRef = useRef(null);
 
-  const { location: userLocation, address, getCurrentLocation } = useGPS();
+  const { getCurrentLocation } = useGPS();
+
+  const openSOS = useCallback(() => {
+    setIsOpen(true);
+    setStep("locating");
+    setSelectedIssue(null);
+    setSelectedCompany(null);
+  }, []);
+
+  const closeSOS = useCallback(() => {
+    setIsOpen(false);
+    setStep("idle");
+    if (timerRef.current) clearInterval(timerRef.current);
+  }, []);
 
   /* Sync with context */
   useEffect(() => {
@@ -139,7 +145,7 @@ export function EmergencySOS() {
       openSOS();
       setEmergencyOpen(false);
     }
-  }, [emergencyOpen]);
+  }, [emergencyOpen, isOpen, openSOS, setEmergencyOpen]);
 
   /* ── Real GPS Location ── */
   useEffect(() => {
@@ -151,7 +157,7 @@ export function EmergencySOS() {
           // Lấy vị trí hiện tại
           const coords = await getCurrentLocation();
           setGpsCoords(coords);
-          setLocation(address || "Vị trí hiện tại");
+          setLocation("Vị trí hiện tại");
 
           // Lấy danh sách công ty gần nhất
           const response = await getNearbyCompanies(
@@ -172,28 +178,39 @@ export function EmergencySOS() {
                     company_name: c.company_name,
                     company_phone: c.company_phone,
                     distance: c.distance_km,
-                    responseTime: 5, // Thời gian phản hồi mặc định
-                    rating: 4.5, // Đánh giá mặc định
-                    services: services.map(s => s.service_name),
+                    name: c.company_name,
+                    phone: c.company_phone,
+                    verified: !!c.is_verified,
+                    responseTime: 5,
+                    rating: Number(c.rating) || 4.5,
+                    services: services.map((s) => s.service_name),
+                    serviceDetails: services.map((s) => ({
+                      service_id: s.service_id,
+                      service_name: s.service_name,
+                      service_price: Number(s.service_price),
+                    })),
                   };
-                } catch (e) {
+                } catch {
                   return {
                     ...c,
                     company_id: c.company_id,
                     company_name: c.company_name,
                     company_phone: c.company_phone,
+                    name: c.company_name,
+                    phone: c.company_phone,
+                    verified: !!c.is_verified,
                     distance: c.distance_km,
                     responseTime: 5,
-                    rating: 4.5,
+                    rating: Number(c.rating) || 4.5,
                     services: [],
+                    serviceDetails: [],
                   };
                 }
               })
             );
             setNearbyCompanies(companiesWithServices);
           } else {
-            // Fallback to mock companies if no nearby found
-            setNearbyCompanies(mockCompanies.slice(0, 3));
+            setNearbyCompanies([]);
           }
 
           setStep("select_issue");
@@ -201,15 +218,14 @@ export function EmergencySOS() {
           console.error("GPS Error:", error);
           setGpsError(error.message);
           setLocation("Không thể xác định vị trí");
-          // Fallback to mock companies
-          setNearbyCompanies(mockCompanies.slice(0, 3));
+          setNearbyCompanies([]);
           setStep("select_issue");
         }
       };
 
       getLocationAndNearby();
     }
-  }, [step]);
+  }, [step, getCurrentLocation]);
 
   /* ── Countdown Timer ── */
   useEffect(() => {
@@ -229,34 +245,82 @@ export function EmergencySOS() {
     };
   }, [step, etaSeconds]);
 
-  const openSOS = useCallback(() => {
-    setIsOpen(true);
-    setStep("locating");
-    setSelectedIssue(null);
-    setSelectedCompany(null);
-  }, []);
-
-  const closeSOS = useCallback(() => {
-    setIsOpen(false);
-    setStep("idle");
-    if (timerRef.current) clearInterval(timerRef.current);
-  }, []);
-
   const handleSelectIssue = (issue) => {
     setSelectedIssue(issue);
     setStep("select_company");
   };
 
-  const handleSelectCompany = (company) => {
-    setSelectedCompany(company);
-    const eta = company.responseTime * 60 + Math.floor(Math.random() * 120);
-    setEtaSeconds(eta);
-    setRequestId(`SOS-${Date.now().toString().slice(-6)}`);
-    setStep("tracking");
+  const findServiceForIssue = (company, issue) => {
+    const keywords = {
+      accident: ["tai nạn", "kéo", "cẩu", "hỗ trợ"],
+      tire: ["lốp", "vá", "thay lốp"],
+      fuel: ["nhiên liệu", "xăng", "chết máy", "sửa chữa"],
+      battery: ["ắc quy", "ac quy", "điện", "sửa chữa"],
+    };
+    const list = keywords[issue?.id] ?? [];
+    return (
+      company.serviceDetails?.find((service) =>
+        list.some((keyword) => service.service_name?.toLowerCase().includes(keyword))
+      ) ??
+      company.serviceDetails?.[0] ??
+      null
+    );
   };
 
-  const handleCancel = () => {
+  const handleSelectCompany = async (company) => {
+    if (!gpsCoords) {
+      setGpsError("Không có tọa độ GPS để tạo yêu cầu.");
+      return;
+    }
+
+    setCreatingRequest(true);
+    try {
+      const matchedService = findServiceForIssue(company, selectedIssue);
+      const created = await createRequest({
+        user_id: currentUser?.role === "user" ? Number(currentUser.id) : null,
+        company_id: company.company_id,
+        absolute_location: {
+          lat: gpsCoords.latitude,
+          lng: gpsCoords.longitude,
+        },
+        relative_location: location,
+        request_description: selectedIssue?.label ?? "Yêu cầu cứu hộ khẩn cấp",
+        issue_type: selectedIssue?.id ?? null,
+        priority: selectedIssue?.urgency === "critical" ? "critical" : selectedIssue?.urgency ?? "high",
+        service_id: matchedService?.service_id ?? null,
+        service_quantity: 1,
+        service_price:
+          matchedService && Number.isFinite(matchedService.service_price)
+            ? matchedService.service_price
+            : null,
+      });
+
+      setSelectedCompany(company);
+      const eta = company.responseTime * 60 + Math.floor(Math.random() * 120);
+      setEtaSeconds(eta);
+      setRequestId(String(created.request_id));
+      setStep("tracking");
+    } catch (error) {
+      console.error("Không thể tạo yêu cầu SOS:", error);
+      setGpsError(error instanceof Error ? error.message : "Không thể tạo yêu cầu SOS");
+    } finally {
+      setCreatingRequest(false);
+    }
+  };
+
+  const handleCancel = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    if (requestId) {
+      try {
+        await updateRequestStatus(requestId, "cancelled", {
+          cancelled_by: "user",
+          cancel_reason: "User cancelled SOS request",
+          changed_by: "user",
+        });
+      } catch (error) {
+        console.error("Không thể hủy yêu cầu SOS:", error);
+      }
+    }
     setStep("cancelled");
     setTimeout(closeSOS, 1800);
   };
@@ -440,11 +504,17 @@ export function EmergencySOS() {
                   </p>
 
                   <div className="space-y-3">
+                    {nearbyCompanies.length === 0 && (
+                      <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-700">
+                        Chưa tìm thấy đơn vị cứu hộ gần vị trí hiện tại. Vui lòng thử lại hoặc gọi hotline.
+                      </div>
+                    )}
                     {nearbyCompanies.map((company, idx) => (
                       <button
-                        key={company.id}
+                        key={company.company_id}
+                        disabled={creatingRequest}
                         onClick={() => handleSelectCompany(company)}
-                        className="w-full text-left bg-white border-2 border-gray-100 hover:border-pink-300 hover:shadow-md rounded-2xl p-4 transition-all active:scale-[0.98] group"
+                        className="w-full text-left bg-white border-2 border-gray-100 hover:border-pink-300 hover:shadow-md rounded-2xl p-4 transition-all active:scale-[0.98] group disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         <div className="flex items-start gap-3">
                           <div className="w-11 h-11 rounded-xl bg-linear-to-br from-pink-100 to-blue-100 flex items-center justify-center text-xl shrink-0 relative">
@@ -479,7 +549,11 @@ export function EmergencySOS() {
                             <div className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-lg">
                               ~{company.responseTime} phút
                             </div>
-                            <ChevronRight size={16} className="text-gray-300 mt-1 ml-auto group-hover:text-pink-400 transition-colors" />
+                            {creatingRequest ? (
+                              <span className="text-xs text-gray-400">Đang gửi...</span>
+                            ) : (
+                              <ChevronRight size={16} className="text-gray-300 mt-1 ml-auto group-hover:text-pink-400 transition-colors" />
+                            )}
                           </div>
                         </div>
                         <div className="flex gap-1.5 mt-2.5 flex-wrap">

@@ -32,9 +32,11 @@ export function useGPS(shouldWatch = false) {
       setAddress(geocoded.address);
       setFullAddress(geocoded.fullAddress);
       setAddressComponents(geocoded.address_components);
+      return loc;
     } catch (err) {
       setError(err.message);
       console.error("GPS Error:", err);
+      throw err;
     } finally {
       setLoading(false);
     }

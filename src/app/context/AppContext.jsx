@@ -63,8 +63,10 @@ export function AppProvider({ children }) {
       return;
     }
 
-    // Backend hiện chỉ có login cho users/companies; admin tạm thời dùng users login.
     const res = await loginUser(identifier, password);
+    if (role === "admin" && res.role !== "admin" && res.data?.user_role !== "admin") {
+      throw new Error("Tài khoản này không có quyền quản trị");
+    }
     const effectiveRole = role === "admin" ? "admin" : "user";
     const ui = toUiUser(effectiveRole, res.data);
     setCurrentRoleState(effectiveRole);

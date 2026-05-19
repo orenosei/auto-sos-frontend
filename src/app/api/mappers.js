@@ -19,6 +19,8 @@ export function toUiUser(role, data) {
     email: u.user_email ?? "",
     phone: u.user_phone,
     role,
+    userRole: u.user_role ?? role,
+    isActive: u.is_active !== false,
     avatar: (u.full_name || u.user_name)?.slice(0, 1)?.toUpperCase() ?? "U",
     createdAt: u.registered_at,
   };
@@ -37,6 +39,14 @@ export function toUiService(s) {
 
 export function toUiCompany(c, companyServices) {
   const services = (companyServices ?? []).map((x) => x.service_name);
+  const serviceDetails = (companyServices ?? []).map((x) => ({
+    id: String(x.service_id),
+    service_id: x.service_id,
+    name: x.service_name,
+    service_name: x.service_name,
+    price: Number(x.service_price),
+    service_price: Number(x.service_price),
+  }));
   const geoLocation = parseGeoJsonPoint(c.absolute_address);
   const rawRating = Number(c.rating);
   const rawReviewCount = Number(c.total_reviews);
@@ -59,6 +69,7 @@ export function toUiCompany(c, companyServices) {
     license: c.company_license ?? "",
     verified: !!c.is_verified,
     services,
+    serviceDetails,
     description: c.rescue_area ? `Khu vực hoạt động: ${c.rescue_area}` : "",
     responseTime: Number.isFinite(rawResponseTime) ? rawResponseTime : null,
     // Add GPS data for map
@@ -98,18 +109,13 @@ function parseGeoJsonFromString(geoJsonString) {
 }
 
 export function toUiRequest(r, lookup) {
-  const status =
-    r.request_status === "pending"
-      ? "pending"
-      : r.request_status === "accepted"
-      ? "accepted"
-      : r.request_status === "completed"
-      ? "completed"
-      : r.request_status === "cancelled"
-      ? "cancelled"
-      : "in_progress";
-
   const point = parseGeoJsonPoint(r.absolute_location);
+  const priceNumber = Number(lookup?.servicePrice ?? r.final_price);
+  const estimatedArrival = r.estimated_arrival ? new Date(r.estimated_arrival) : null;
+  const etaMinutes =
+    estimatedArrival && Number.isFinite(estimatedArrival.getTime())
+      ? Math.max(0, Math.round((estimatedArrival.getTime() - Date.now()) / 60000))
+      : null;
 
   return {
     id: String(r.request_id),
@@ -117,15 +123,37 @@ export function toUiRequest(r, lookup) {
     userName: lookup?.userName ?? "",
     userPhone: lookup?.userPhone ?? "",
     serviceType: lookup?.serviceType ?? "",
+    servicePrice: Number.isFinite(priceNumber) ? priceNumber : null,
+    price: Number.isFinite(priceNumber) ? `${priceNumber.toLocaleString("vi-VN")}đ` : "",
     description: r.request_description ?? "",
+    issueType: r.issue_type ?? "",
+    priority: r.priority ?? "normal",
     location: r.relative_location ?? "",
     latitude: point.lat,
     longitude: point.lng,
-    status,
+    status: r.request_status,
     companyId: r.company_id != null ? String(r.company_id) : undefined,
+    vehicleId: r.vehicle_id != null ? String(r.vehicle_id) : "",
     companyName: lookup?.companyName,
-    estimatedTime: r.estimated_arrival ? undefined : undefined,
+    estimatedArrival: r.estimated_arrival,
+    estimatedTime: etaMinutes,
+    acceptedAt: r.accepted_at,
+    headingAt: r.heading_at,
+    arrivedAt: r.arrived_at,
+    actualArrival: r.actual_arrival,
+    completedAt: r.completed_at,
+    cancelledAt: r.cancelled_at,
+    cancelledBy: r.cancelled_by,
+    cancelReason: r.cancel_reason,
+    finalPrice: r.final_price,
     createdAt: r.created_at,
-    updatedAt: r.completed_at ?? r.actual_arrival ?? r.created_at,
+    updatedAt:
+      r.completed_at ??
+      r.cancelled_at ??
+      r.arrived_at ??
+      r.heading_at ??
+      r.accepted_at ??
+      r.actual_arrival ??
+      r.created_at,
   };
 }
