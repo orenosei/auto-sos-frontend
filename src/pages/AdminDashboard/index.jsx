@@ -146,6 +146,10 @@ export default function AdminDashboard() {
           address: x.relative_address ?? "",
           operatingArea: x.rescue_area ?? "",
           license: x.company_license ?? "",
+          avatarUrl: x.avatar_url ?? "",
+          verificationDocumentUrls: Array.isArray(x.verification_document_urls)
+            ? x.verification_document_urls
+            : [],
           verified: !!x.is_verified,
           rating: 4.5,
           totalReviews: 0,
@@ -240,6 +244,10 @@ export default function AdminDashboard() {
   };
 
   const handleToggleCompanyVerified = async (company) => {
+    if (!company.verified && company.verificationDocumentUrls.length === 0) {
+      window.alert("Công ty cần tải tài liệu kiểm duyệt trước khi xác minh");
+      return;
+    }
     try {
       const updated = await updateCompany(company.id, { is_verified: !company.verified });
       setCompanies((prev) =>

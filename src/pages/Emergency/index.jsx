@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../../context/useApp";
 import { useGPS } from "../../hooks/useGPS";
-import { getCompanies, getNearbyCompanies, getCompanyServices, getCompanyRating } from "../../api/companies";
+import { getCompanies, getNearbyCompanies, getCompanyServices } from "../../api/companies";
 import { createRequest, updateRequestStatus } from "../../api/requests";
 import { calculateDistance } from "../../utils/gpsUtils";
 
@@ -139,6 +139,11 @@ export function EmergencySOS() {
   const [gpsCoords, setGpsCoords] = useState(null);
   const [selectedIssue, setSelectedIssue] = useState(null);
   const [selectedCompany, setSelectedCompany] = useState(null);
+  const [contactInfo, setContactInfo] = useState({
+    name: "",
+    phone: "",
+    contactBackNow: true,
+  });
   const [nearbyCompanies, setNearbyCompanies] = useState([]);
   const [etaSeconds, setEtaSeconds] = useState(0);
   const [initialEtaSeconds, setInitialEtaSeconds] = useState(0);
@@ -156,13 +161,18 @@ export function EmergencySOS() {
     setGpsCoords(null);
     setSelectedIssue(null);
     setSelectedCompany(null);
+    setContactInfo({
+      name: currentUser?.name ?? "",
+      phone: currentUser?.phone ?? "",
+      contactBackNow: true,
+    });
     setNearbyCompanies([]);
     setEtaSeconds(0);
     setInitialEtaSeconds(0);
     setRequestId("");
     setGpsError(null);
     setCreatingRequest(false);
-  }, []);
+  }, [currentUser?.name, currentUser?.phone]);
 
   const closeSOS = useCallback(() => {
     setIsOpen(false);
@@ -322,6 +332,10 @@ export function EmergencySOS() {
       setGpsError("Không có tọa độ GPS để tạo yêu cầu.");
       return;
     }
+    if (!contactInfo.name.trim() || !contactInfo.phone.trim()) {
+      setGpsError("Vui lòng nhập tên và số điện thoại để công ty liên hệ lại.");
+      return;
+    }
 
     setCreatingRequest(true);
     try {
@@ -336,7 +350,10 @@ export function EmergencySOS() {
         relative_location: location,
         request_description: selectedIssue?.label ?? "Yêu cầu cứu hộ khẩn cấp",
         issue_type: selectedIssue?.id ?? null,
-        priority: selectedIssue?.urgency === "critical" ? "critical" : selectedIssue?.urgency ?? "high",
+        contact_name: contactInfo.name.trim() || currentUser?.name || null,
+        contact_phone: contactInfo.phone.trim() || currentUser?.phone || null,
+        contact_back_now: contactInfo.contactBackNow,
+        priority: selectedIssue?.urgency === "critical" ? "emergency" : "critical",
         service_id: matchedService?.service_id ?? null,
         service_quantity: 1,
         service_price:
@@ -455,18 +472,28 @@ export function EmergencySOS() {
                 {step !== "tracking" ? (
                   <button
                     onClick={closeSOS}
-                    className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+                    className="flex items-center gap-1 rounded-full bg-white/20 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/30"
                   >
-                    <X size={16} className="text-white" />
+                    <X size={14} className="text-white" />
+                    Thoát
                   </button>
                 ) : (
-                  <button
-                    onClick={handleCancel}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors text-white text-xs font-medium"
-                  >
-                    <XCircle size={14} />
-                    Hủy yêu cầu
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={closeSOS}
+                      className="flex items-center gap-1 rounded-full bg-white/20 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/30"
+                    >
+                      <X size={14} />
+                      Thoát
+                    </button>
+                    <button
+                      onClick={handleCancel}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors text-white text-xs font-medium"
+                    >
+                      <XCircle size={14} />
+                      Hủy
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -495,7 +522,19 @@ export function EmergencySOS() {
             {/* Body */}
             <div className="max-h-[70vh] overflow-y-auto">
               {/* ── Step: Locating ── */}
-              {step === "locating" && <LocatingStep />}
+              {step === "locating" && (
+                <div>
+                  <LocatingStep />
+                  <div className="px-5 pb-5">
+                    <button
+                      onClick={closeSOS}
+                      className="w-full rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                    >
+                      Thoát về màn hình chính
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* ── Step: Select Issue ── */}
               {step === "select_issue" && (
@@ -526,7 +565,7 @@ export function EmergencySOS() {
                     onClick={closeSOS}
                     className="mt-4 w-full py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors"
                   >
-                    Hủy bỏ
+                    Thoát về màn hình chính
                   </button>
                 </div>
               )}
@@ -547,6 +586,39 @@ export function EmergencySOS() {
                       </button>
                     </div>
                   )}
+
+                  <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 p-3">
+                    <div className="grid grid-cols-1 gap-2">
+                      <input
+                        type="text"
+                        value={contactInfo.name}
+                        onChange={(e) => setContactInfo((prev) => ({ ...prev, name: e.target.value }))}
+                        placeholder="Tên người cần hỗ trợ"
+                        className="w-full rounded-xl border border-red-100 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-100"
+                      />
+                      <input
+                        type="tel"
+                        value={contactInfo.phone}
+                        onChange={(e) => setContactInfo((prev) => ({ ...prev, phone: e.target.value }))}
+                        placeholder="Số điện thoại liên hệ ngay"
+                        className="w-full rounded-xl border border-red-100 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-100"
+                      />
+                      <label className="flex items-center gap-2 text-xs font-medium text-red-700">
+                        <input
+                          type="checkbox"
+                          checked={contactInfo.contactBackNow}
+                          onChange={(e) =>
+                            setContactInfo((prev) => ({
+                              ...prev,
+                              contactBackNow: e.target.checked,
+                            }))
+                          }
+                          className="h-4 w-4 accent-red-500"
+                        />
+                        Yêu cầu công ty liên hệ lại ngay lập tức
+                      </label>
+                    </div>
+                  </div>
 
                   <p className="text-sm text-gray-500 mb-3 text-center">
                     <span className="inline-flex items-center gap-1 text-green-600 font-medium">
@@ -627,6 +699,12 @@ export function EmergencySOS() {
                     className="mt-4 w-full py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors"
                   >
                     ← Quay lại
+                  </button>
+                  <button
+                    onClick={closeSOS}
+                    className="mt-2 w-full py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors"
+                  >
+                    Thoát về màn hình chính
                   </button>
                 </div>
               )}
@@ -734,6 +812,12 @@ export function EmergencySOS() {
                       <Phone size={16} />
                       Gọi trực tiếp
                     </a>
+                    <button
+                      onClick={closeSOS}
+                      className="flex-1 rounded-2xl border border-gray-200 py-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+                    >
+                      Thoát
+                    </button>
                   </div>
 
                   <p className="text-center text-[10px] text-gray-400 mt-3">

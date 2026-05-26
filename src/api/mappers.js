@@ -7,7 +7,8 @@ export function toUiUser(role, data) {
       email: "",
       phone: c.company_phone,
       role,
-      avatar: c.company_name?.slice(0, 1)?.toUpperCase() ?? "C",
+      avatar: c.company_name?.slice(0, 1)?.toUpperCase() || "C",
+      avatarUrl: c.avatar_url ?? "",
       createdAt: c.registered_at,
     };
   }
@@ -21,7 +22,8 @@ export function toUiUser(role, data) {
     role,
     userRole: u.user_role ?? role,
     isActive: u.is_active !== false,
-    avatar: (u.full_name || u.user_name)?.slice(0, 1)?.toUpperCase() ?? "U",
+    avatar: (u.full_name || u.user_name)?.slice(0, 1)?.toUpperCase() || "U",
+    avatarUrl: u.avatar_url ?? "",
     createdAt: u.registered_at,
   };
 }
@@ -83,12 +85,20 @@ export function toUiCompany(c, companyServices) {
     relative_address: c.relative_address ?? "",
     phone: c.company_phone,
     company_phone: c.company_phone,
+    avatarUrl: c.avatar_url ?? "",
+    avatar_url: c.avatar_url ?? "",
     email: "",
     rating: Number.isFinite(rawRating) ? rawRating : null,
     totalReviews: Number.isFinite(rawReviewCount) ? rawReviewCount : null,
     distance: 99,
     operatingArea: c.rescue_area ?? "",
     license: c.company_license ?? "",
+    verificationDocumentUrls: Array.isArray(c.verification_document_urls)
+      ? c.verification_document_urls
+      : [],
+    verification_document_urls: Array.isArray(c.verification_document_urls)
+      ? c.verification_document_urls
+      : [],
     verified: !!c.is_verified,
     services,
     serviceDetails,
@@ -144,11 +154,15 @@ export function toUiRequest(r, lookup) {
     userId: r.user_id != null ? String(r.user_id) : "",
     userName: lookup?.userName ?? "",
     userPhone: lookup?.userPhone ?? "",
+    userAvatarUrl: lookup?.userAvatarUrl ?? "",
     serviceType: lookup?.serviceType ?? "",
     servicePrice: Number.isFinite(priceNumber) ? priceNumber : null,
     price: Number.isFinite(priceNumber) ? `${priceNumber.toLocaleString("vi-VN")}đ` : "",
     description: r.request_description ?? "",
     issueType: r.issue_type ?? "",
+    contactName: r.contact_name ?? "",
+    contactPhone: r.contact_phone ?? "",
+    contactBackNow: !!r.contact_back_now,
     priority: r.priority ?? "normal",
     location: r.relative_location ?? "",
     latitude: point.lat,

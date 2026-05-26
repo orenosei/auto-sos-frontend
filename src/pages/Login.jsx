@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Car, User, Building2, ShieldCheck, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { Car, User, Building2, ShieldCheck, ArrowRight, Eye, EyeOff, Camera, FileUp, MapPin } from "lucide-react";
 import { useApp } from "../context/useApp";
+import LocationPickerMap from "../components/LocationPickerMap";
+import { uploadFileToCloudinary } from "../api/uploads";
 
 export default function Login() {
   const { login, register, loginDemo } = useApp();
@@ -16,6 +18,7 @@ export default function Login() {
     user_phone: "",
     user_email: "",
     password: "",
+    avatar_url: "",
   });
   const [companyRegisterForm, setCompanyRegisterForm] = useState({
     company_name: "",
@@ -24,11 +27,14 @@ export default function Login() {
     relative_address: "",
     rescue_area: "",
     company_license: "",
+    avatar_url: "",
+    verification_document_urls: [],
     lat: "",
     lng: "",
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [uploadingField, setUploadingField] = useState("");
 
   const roles = [
     {
@@ -80,7 +86,10 @@ export default function Login() {
             throw new Error("Vui lòng nhập mật khẩu");
           }
           if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-            throw new Error("Vui lòng nhập tọa độ GPS hợp lệ (lat/lng)");
+            throw new Error("Vui lòng chọn vị trí công ty trên bản đồ");
+          }
+          if (companyRegisterForm.verification_document_urls.length === 0) {
+            throw new Error("Vui lòng tải lên tài liệu kiểm duyệt công ty");
           }
 
           await register("company", {
@@ -91,6 +100,8 @@ export default function Login() {
             company_phone: companyRegisterForm.company_phone.trim(),
             rescue_area: companyRegisterForm.rescue_area.trim() || null,
             company_license: companyRegisterForm.company_license.trim() || null,
+            avatar_url: companyRegisterForm.avatar_url || null,
+            verification_document_urls: companyRegisterForm.verification_document_urls,
           });
           navigate("/");
           return;
@@ -112,7 +123,7 @@ export default function Login() {
           full_name: userRegisterForm.full_name.trim() || null,
           user_phone: userRegisterForm.user_phone.trim(),
           user_email: userRegisterForm.user_email.trim() || null,
-          avatar_url: null,
+          avatar_url: userRegisterForm.avatar_url || null,
         });
         navigate("/");
         return;
@@ -131,6 +142,20 @@ export default function Login() {
   const handleQuickDemo = (role) => {
     loginDemo(role);
     navigate("/");
+  };
+
+  const handleUpload = async (file, folder, onDone, fieldKey) => {
+    if (!file) return;
+    setUploadingField(fieldKey);
+    setError("");
+    try {
+      const uploaded = await uploadFileToCloudinary(file, folder);
+      onDone(uploaded.secureUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không thể tải tệp lên");
+    } finally {
+      setUploadingField("");
+    }
   };
 
   const colorClass = {
@@ -315,30 +340,24 @@ export default function Login() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1.5 block">Vĩ độ (lat) *</label>
-                    <input
-                      type="text"
-                      value={companyRegisterForm.lat}
-                      onChange={(e) =>
-                        setCompanyRegisterForm((f) => ({ ...f, lat: e.target.value }))
-                      }
-                      placeholder="21.0278"
-                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1.5 block">Kinh độ (lng) *</label>
-                    <input
-                      type="text"
-                      value={companyRegisterForm.lng}
-                      onChange={(e) =>
-                        setCompanyRegisterForm((f) => ({ ...f, lng: e.target.value }))
-                      }
-                      placeholder="105.8342"
-                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition-all"
-                    />
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1.5 block">Vị trí trên bản đồ *</label>
+                  <LocationPickerMap
+                    lat={companyRegisterForm.lat}
+                    lng={companyRegisterForm.lng}
+                    onPick={(point) =>
+                      setCompanyRegisterForm((f) => ({
+                        ...f,
+                        lat: String(point.lat),
+                        lng: String(point.lng),
+                      }))
+                    }
+                  />
+                  <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                    <MapPin size={12} className="text-pink-400" />
+                    {companyRegisterForm.lat && companyRegisterForm.lng
+                      ? `${Number(companyRegisterForm.lat).toFixed(5)}, ${Number(companyRegisterForm.lng).toFixed(5)}`
+                      : "Nhấp vào bản đồ để chọn vị trí công ty"}
                   </div>
                 </div>
 
@@ -372,6 +391,68 @@ export default function Login() {
                     placeholder="Số giấy phép hoặc link"
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition-all"
                   />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1.5 block">Logo / avatar công ty</label>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-blue-200 px-4 py-3 text-sm text-blue-600 hover:bg-blue-50">
+                    <Camera size={16} />
+                    <span>{uploadingField === "company_avatar" ? "Đang tải..." : "Tải ảnh đại diện"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) =>
+                        handleUpload(
+                          e.target.files?.[0],
+                          "auto-sos/avatars",
+                          (url) => setCompanyRegisterForm((f) => ({ ...f, avatar_url: url })),
+                          "company_avatar"
+                        )
+                      }
+                    />
+                  </label>
+                  {companyRegisterForm.avatar_url && (
+                    <img src={companyRegisterForm.avatar_url} alt="Avatar công ty" className="mt-2 h-16 w-16 rounded-xl object-cover" />
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1.5 block">Tài liệu kiểm duyệt *</label>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-purple-200 px-4 py-3 text-sm text-purple-600 hover:bg-purple-50">
+                    <FileUp size={16} />
+                    <span>{uploadingField === "company_docs" ? "Đang tải..." : "Tải giấy phép, đăng ký kinh doanh, ảnh giấy tờ"}</span>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      multiple
+                      className="hidden"
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files ?? []);
+                        for (const file of files) {
+                          await handleUpload(
+                            file,
+                            "auto-sos/company-documents",
+                            (url) =>
+                              setCompanyRegisterForm((f) => ({
+                                ...f,
+                                verification_document_urls: [...f.verification_document_urls, url],
+                              })),
+                            "company_docs"
+                          );
+                        }
+                      }}
+                    />
+                  </label>
+                  {companyRegisterForm.verification_document_urls.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {companyRegisterForm.verification_document_urls.map((url, index) => (
+                        <a key={url} href={url} target="_blank" rel="noreferrer" className="block truncate text-xs text-blue-600 hover:underline">
+                          Tài liệu {index + 1}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -455,6 +536,30 @@ export default function Login() {
                     placeholder="nguyenvanan@email.com"
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition-all"
                   />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1.5 block">Avatar</label>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-pink-200 px-4 py-3 text-sm text-pink-600 hover:bg-pink-50">
+                    <Camera size={16} />
+                    <span>{uploadingField === "user_avatar" ? "Đang tải..." : "Tải ảnh đại diện"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) =>
+                        handleUpload(
+                          e.target.files?.[0],
+                          "auto-sos/avatars",
+                          (url) => setUserRegisterForm((f) => ({ ...f, avatar_url: url })),
+                          "user_avatar"
+                        )
+                      }
+                    />
+                  </label>
+                  {userRegisterForm.avatar_url && (
+                    <img src={userRegisterForm.avatar_url} alt="Avatar người dùng" className="mt-2 h-16 w-16 rounded-full object-cover" />
+                  )}
                 </div>
 
                 <div>

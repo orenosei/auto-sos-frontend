@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAdminDashboard } from '../AdminDashboardContext';
-import { CheckCircle2, Loader2, MapPin, MessageCircle, Phone, Search, ChevronRight, XCircle } from "lucide-react";
+import { Search, ChevronRight, Eye } from "lucide-react";
 
 export default function RequestsTab() {
   const context = useAdminDashboard();
