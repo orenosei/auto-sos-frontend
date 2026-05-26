@@ -53,6 +53,17 @@ export function Layout({ children }) {
     { label: "Cộng đồng", href: "/community" },
   ];
 
+  const avatarSource =
+    currentUser?.avatarUrl ||
+    (typeof currentUser?.avatar === "string" &&
+    /^(https?:\/\/|data:image\/|blob:)/i.test(currentUser.avatar)
+      ? currentUser.avatar
+      : "");
+  const avatarInitial =
+    !avatarSource && typeof currentUser?.avatar === "string" && currentUser.avatar.length <= 3
+      ? currentUser.avatar
+      : currentUser?.name?.slice(0, 1)?.toUpperCase() || "U";
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Top Alert Bar */}
@@ -117,9 +128,17 @@ export function Layout({ children }) {
                       onClick={() => setProfileOpen(!profileOpen)}
                       className="flex items-center gap-2 bg-gray-100 rounded-full pl-1 pr-3 py-1 hover:bg-gray-200 transition-colors"
                     >
-                      <div className="w-8 h-8 bg-linear-to-br from-pink-400 to-blue-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                        {currentUser?.avatar || "U"}
-                      </div>
+                      {avatarSource ? (
+                        <img
+                          src={avatarSource}
+                          alt={currentUser?.name || "Avatar"}
+                          className="h-8 w-8 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 bg-linear-to-br from-pink-400 to-blue-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                          {avatarInitial}
+                        </div>
+                      )}
                       <span className="hidden sm:block text-sm font-medium text-gray-700 max-w-30 truncate">
                         {currentUser?.name}
                       </span>

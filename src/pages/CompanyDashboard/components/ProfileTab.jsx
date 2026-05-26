@@ -1,13 +1,25 @@
 import React from 'react';
 import { useCompanyDashboard } from '../CompanyDashboardContext';
-import { Edit } from "lucide-react";
+import { Camera, Edit, FileUp, X } from "lucide-react";
 import { updateCompany } from "../../../api/companies";
+import { uploadFileToCloudinary } from "../../../api/uploads";
 
 export default function ProfileTab() {
   const context = useCompanyDashboard();
   const { 
     updateCurrentUser, companyId, companyProfile, setCompanyName, setCompanyProfile, profileDraft, setProfileDraft, editingProfile, setEditingProfile, savingProfile, setSavingProfile, parseGeoJsonPoint
   } = context;
+
+  const uploadProfileFile = async (file, folder, onDone) => {
+    if (!file) return;
+    try {
+      const uploaded = await uploadFileToCloudinary(file, folder);
+      onDone(uploaded.secureUrl);
+    } catch (e) {
+      console.error(e);
+      window.alert(e instanceof Error ? e.message : "Tải tệp thất bại");
+    }
+  };
 
   return (
     <div className="max-w-2xl bg-white rounded-2xl border border-pink-100 p-6">
@@ -16,6 +28,33 @@ export default function ProfileTab() {
             <div className="text-sm text-gray-500">Đang tải hồ sơ...</div>
           ) : (
             <>
+              <div className="mb-5 flex items-center gap-4 rounded-2xl border border-blue-50 bg-blue-50/60 p-4">
+                {profileDraft.avatar_url ? (
+                  <img src={profileDraft.avatar_url} alt="Avatar công ty" className="h-16 w-16 rounded-2xl object-cover" />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-2xl">
+                    🚑
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Avatar công ty</p>
+                  <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50">
+                    <Camera size={14} />
+                    Tải ảnh mới
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) =>
+                        uploadProfileFile(e.target.files?.[0], "auto-sos/avatars", (url) =>
+                          setProfileDraft((prev) => ({ ...prev, avatar_url: url }))
+                        )
+                      }
+                    />
+                  </label>
+                </div>
+              </div>
+
               <div className="space-y-4">
                 {[
                   {
@@ -124,6 +163,65 @@ export default function ProfileTab() {
                 })}
               </div>
 
+              <div className="mt-5 rounded-2xl border border-purple-100 bg-purple-50/50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Tài liệu kiểm duyệt</p>
+                    <p className="text-xs text-gray-500">Giấy phép, đăng ký kinh doanh hoặc ảnh giấy tờ liên quan.</p>
+                  </div>
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-purple-600 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-700">
+                    <FileUp size={14} />
+                    Tải lên
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      multiple
+                      className="hidden"
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files ?? []);
+                        for (const file of files) {
+                          await uploadProfileFile(file, "auto-sos/company-documents", (url) =>
+                            setProfileDraft((prev) => ({
+                              ...prev,
+                              verification_document_urls: [
+                                ...(prev.verification_document_urls ?? []),
+                                url,
+                              ],
+                            }))
+                          );
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {(profileDraft.verification_document_urls ?? []).length === 0 ? (
+                    <p className="text-xs text-yellow-700">Chưa có tài liệu. Công ty cần tải tài liệu để admin kiểm duyệt.</p>
+                  ) : (
+                    profileDraft.verification_document_urls.map((url, index) => (
+                      <div key={url} className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs">
+                        <a href={url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-blue-600 hover:underline">
+                          Tài liệu {index + 1}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setProfileDraft((prev) => ({
+                              ...prev,
+                              verification_document_urls: prev.verification_document_urls.filter((item) => item !== url),
+                            }))
+                          }
+                          className="text-gray-400 hover:text-red-500"
+                          aria-label="Xóa tài liệu"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
               <button
                 type="button"
                 disabled={savingProfile}
@@ -155,9 +253,11 @@ export default function ProfileTab() {
                     const updated = await updateCompany(companyId, {
                       company_name,
                       company_phone,
+                      avatar_url: profileDraft.avatar_url || null,
                       relative_address: profileDraft.relative_address.trim() || null,
                       rescue_area: profileDraft.rescue_area.trim() || null,
                       company_license: profileDraft.company_license.trim() || null,
+                      verification_document_urls: profileDraft.verification_document_urls ?? [],
                       absolute_address:
                         hasGeo && Number.isFinite(lat) && Number.isFinite(lng)
                           ? { lat, lng }
@@ -169,8 +269,12 @@ export default function ProfileTab() {
                     setCompanyProfile({
                       address: updated.relative_address ?? "",
                       phone: updated.company_phone,
+                      avatarUrl: updated.avatar_url ?? "",
                       rescueArea: updated.rescue_area ?? "",
                       license: updated.company_license ?? "",
+                      verificationDocumentUrls: Array.isArray(updated.verification_document_urls)
+                        ? updated.verification_document_urls
+                        : [],
                       verified: !!updated.is_verified,
                       lat: point.lat != null ? String(point.lat) : "",
                       lng: point.lng != null ? String(point.lng) : "",
@@ -178,15 +282,24 @@ export default function ProfileTab() {
                     setProfileDraft({
                       company_name: updated.company_name ?? "",
                       company_phone: updated.company_phone ?? "",
+                      avatar_url: updated.avatar_url ?? "",
                       relative_address: updated.relative_address ?? "",
                       rescue_area: updated.rescue_area ?? "",
                       company_license: updated.company_license ?? "",
+                      verification_document_urls: Array.isArray(updated.verification_document_urls)
+                        ? updated.verification_document_urls
+                        : [],
                       lat: point.lat != null ? String(point.lat) : "",
                       lng: point.lng != null ? String(point.lng) : "",
                     });
                     setEditingProfile({});
 
-                    updateCurrentUser({ name: updated.company_name, phone: updated.company_phone });
+                    updateCurrentUser({
+                      name: updated.company_name,
+                      phone: updated.company_phone,
+                      avatar: updated.company_name?.slice(0, 1)?.toUpperCase() || "C",
+                      avatarUrl: updated.avatar_url ?? "",
+                    });
                     window.alert("Đã lưu hồ sơ công ty");
                   } catch (e) {
                     console.error(e);

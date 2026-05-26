@@ -35,6 +35,8 @@ import { useToast } from "../../components/ui/toastContext";
 import { toUiCompany, toUiRequest, toUiService } from "../../api/mappers";
 import { getRequestMessages, addRequestMessage, markMessageSeen } from "../../api/messages";
 import { addReview } from "../../api/reviews";
+import { updateUser } from "../../api/users";
+import { uploadFileToCloudinary } from "../../api/uploads";
 import { reverseGeocode, formatAddress, calculateDistance, calculateETA } from "../../utils/gpsUtils";
 
 const statusConfig = {
@@ -61,7 +63,7 @@ const serviceIconMap = {
 const SELECTED_COMPANY_STORAGE_KEY = "auto-sos:selected-company-id";
 
 export default function UserDashboard() {
-  const { currentUser, isLoggedIn } = useApp();
+  const { currentUser, isLoggedIn, updateCurrentUser } = useApp();
   const locationState = useLocation();
 
   const preselectedCompanyId = useMemo(() => {
@@ -123,6 +125,7 @@ export default function UserDashboard() {
   const messageTimerRef = useRef(null);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [submittingRequest, setSubmittingRequest] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const toast = useToast();
 
   const openMessageModal = async (req) => {
@@ -546,6 +549,24 @@ export default function UserDashboard() {
     }
   };
 
+  const handleUserAvatarUpload = async (file) => {
+    if (!file || !userId) return;
+    setUploadingAvatar(true);
+    try {
+      const uploaded = await uploadFileToCloudinary(file, "auto-sos/avatars");
+      const updated = await updateUser(userId, { avatar_url: uploaded.secureUrl });
+      updateCurrentUser({
+        avatar: currentUser?.name?.slice(0, 1)?.toUpperCase() || currentUser?.avatar || "U",
+        avatarUrl: updated.avatar_url ?? "",
+      });
+    } catch (e) {
+      console.error(e);
+      window.alert(e instanceof Error ? e.message : "Tải avatar thất bại");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const handleRatingSubmit = async () => {
     try {
       await addReview(ratingModal.requestId, {
@@ -573,9 +594,27 @@ export default function UserDashboard() {
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Xin chào, {currentUser?.name ?? ""} 👋</h1>
+        <div className="flex items-center gap-3">
+          <label className="relative block h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-full border border-pink-100 bg-pink-50">
+            {currentUser?.avatarUrl || (typeof currentUser?.avatar === "string" && currentUser.avatar.startsWith("http")) ? (
+              <img src={currentUser.avatarUrl || currentUser.avatar} alt={currentUser?.name || "Người dùng"} className="h-full w-full object-cover" />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center text-lg font-bold text-pink-600">
+                {(currentUser?.name || "U").slice(0, 1).toUpperCase()}
+              </span>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleUserAvatarUpload(e.target.files?.[0])}
+            />
+          </label>
+          <div>
+          <h1 className="text-2xl font-bold text-gray-900">Xin chào, {currentUser?.name ?? ""}</h1>
           <p className="text-gray-500 text-sm mt-1">Quản lý yêu cầu cứu hộ của bạn</p>
+          {uploadingAvatar && <p className="text-xs text-pink-500 mt-1">Đang tải avatar...</p>}
+          </div>
         </div>
         {activeRequest && (
           <div className="flex items-center gap-2 bg-purple-50 border border-purple-200 rounded-xl px-4 py-2">

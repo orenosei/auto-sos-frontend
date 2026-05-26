@@ -32,6 +32,7 @@ import {
 import { getServices } from "../../api/services";
 import { getRequests, getRequestServices, updateRequestStatus } from "../../api/requests";
 import { getUser } from "../../api/users";
+import { getRequestImages } from "../../api/requestImages";
 import { createVehicle, deleteVehicle, getVehicles, updateVehicle } from "../../api/vehicles";
 import { toUiRequest } from "../../api/mappers";
 import { getRequestMessages, addRequestMessage, markMessageSeen } from "../../api/messages";
@@ -243,7 +244,7 @@ export default function CompanyDashboard() {
 
       const mapped = await Promise.all(
         backend.map(async (r) => {
-          const [svc, usr] = await Promise.all([
+          const [svc, usr, imageRows] = await Promise.all([
             (async () => {
               try {
                 const res = await getRequestServices(r.request_id);
@@ -264,15 +265,27 @@ export default function CompanyDashboard() {
                 return null;
               }
             })(),
+            (async () => {
+              try {
+                const res = await getRequestImages(r.request_id);
+                return res.data ?? [];
+              } catch {
+                return [];
+              }
+            })(),
           ]);
 
-          return toUiRequest(r, {
+          return {
+            ...toUiRequest(r, {
             userName: usr?.full_name || usr?.user_name || "",
             userPhone: usr?.user_phone || "",
+            userAvatarUrl: usr?.avatar_url || "",
             companyName,
             serviceType: svc.name,
             servicePrice: svc.price,
-          });
+            }),
+            imageUrls: imageRows.map((image) => image.image_url).filter(Boolean),
+          };
         })
       );
 
@@ -305,8 +318,12 @@ export default function CompanyDashboard() {
         setCompanyProfile({
           address: c.relative_address ?? "",
           phone: c.company_phone,
+          avatarUrl: c.avatar_url ?? "",
           rescueArea: c.rescue_area ?? "",
           license: c.company_license ?? "",
+          verificationDocumentUrls: Array.isArray(c.verification_document_urls)
+            ? c.verification_document_urls
+            : [],
           verified: !!c.is_verified,
           lat: point.lat != null ? String(point.lat) : "",
           lng: point.lng != null ? String(point.lng) : "",
@@ -314,9 +331,13 @@ export default function CompanyDashboard() {
         setProfileDraft({
           company_name: c.company_name ?? "",
           company_phone: c.company_phone ?? "",
+          avatar_url: c.avatar_url ?? "",
           relative_address: c.relative_address ?? "",
           rescue_area: c.rescue_area ?? "",
           company_license: c.company_license ?? "",
+          verification_document_urls: Array.isArray(c.verification_document_urls)
+            ? c.verification_document_urls
+            : [],
           lat: point.lat != null ? String(point.lat) : "",
           lng: point.lng != null ? String(point.lng) : "",
         });
@@ -670,9 +691,13 @@ export default function CompanyDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-linear-to-br from-blue-400 to-blue-300 flex items-center justify-center text-2xl shadow-md">
-            🚑
-          </div>
+          {companyProfile?.avatarUrl ? (
+            <img src={companyProfile.avatarUrl} alt={companyName || "Công ty"} className="h-12 w-12 rounded-2xl object-cover shadow-md" />
+          ) : (
+            <div className="w-12 h-12 rounded-2xl bg-linear-to-br from-blue-400 to-blue-300 flex items-center justify-center text-2xl shadow-md">
+              🚑
+            </div>
+          )}
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{companyName || currentUser?.name || ""}</h1>
             <div className="flex items-center gap-2">

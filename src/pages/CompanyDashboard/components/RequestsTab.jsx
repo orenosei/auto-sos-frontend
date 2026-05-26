@@ -1,6 +1,6 @@
 import React from 'react';
 import { useCompanyDashboard } from '../CompanyDashboardContext';
-import { Bell, CheckCircle2, Loader2, MapPin, MessageCircle, Phone, ChevronRight, XCircle } from "lucide-react";
+import { Bell, CheckCircle2, Loader2, MapPin, MessageCircle, Phone, ChevronRight, XCircle, AlertTriangle } from "lucide-react";
 
 export default function RequestsTab() {
   const context = useCompanyDashboard();
@@ -56,19 +56,34 @@ export default function RequestsTab() {
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div>
+                      <div className="flex min-w-0 gap-3">
+                        {req.userAvatarUrl ? (
+                          <img src={req.userAvatarUrl} alt={req.userName || "Khách hàng"} className="h-10 w-10 rounded-full object-cover" />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">
+                            {(req.userName || "U").slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${status.color}`}>
                             {status.label}
                           </span>
+                          {req.priority && req.priority !== "normal" && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">
+                              <AlertTriangle size={11} />
+                              Ưu tiên cao
+                            </span>
+                          )}
                           <h3 className="font-semibold text-gray-800 text-sm">{req.serviceType}</h3>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1">{req.userName} · {req.userPhone}</p>
+                        <p className="text-sm text-gray-600 mt-1">{req.contactName || req.userName} · {req.contactPhone || req.userPhone}</p>
                         <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
                           <MapPin size={11} className="text-pink-400" />
                           {req.location}
                         </div>
                         <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{req.description}</p>
+                        </div>
                       </div>
                       <ChevronRight size={16} className="text-gray-300 shrink-0 mt-1" />
                     </div>
@@ -93,12 +108,23 @@ export default function RequestsTab() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Khách hàng</span>
-                    <span className="font-medium text-gray-800">{selectedReq.userName}</span>
+                    <span className="font-medium text-gray-800">{selectedReq.contactName || selectedReq.userName}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Điện thoại</span>
-                    <span className="font-medium text-blue-600">{selectedReq.userPhone}</span>
+                    <span className="font-medium text-blue-600">{selectedReq.contactPhone || selectedReq.userPhone}</span>
                   </div>
+                  {selectedReq.contactBackNow && (
+                    <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">
+                      Khách yêu cầu công ty liên hệ lại ngay lập tức.
+                    </div>
+                  )}
+                  {selectedReq.priority && selectedReq.priority !== "normal" && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Ưu tiên</span>
+                      <span className="font-semibold text-red-600">Cao</span>
+                    </div>
+                  )}
                   <div>
                     <span className="text-gray-500">Vị trí</span>
                     <p className="font-medium text-gray-800 mt-0.5">{selectedReq.location}</p>
@@ -131,6 +157,18 @@ export default function RequestsTab() {
                       <span className="font-medium text-gray-800">
                         {vehicles.find((v) => String(v.vehicle_id) === String(selectedReq.vehicleId))?.vehicle_license ?? `#${selectedReq.vehicleId}`}
                       </span>
+                    </div>
+                  )}
+                  {selectedReq.imageUrls?.length > 0 && (
+                    <div>
+                      <span className="text-gray-500">Ảnh người dùng đã tải</span>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        {selectedReq.imageUrls.map((url) => (
+                          <a key={url} href={url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl border border-gray-100">
+                            <img src={url} alt="Ảnh sự cố" className="h-24 w-full object-cover" />
+                          </a>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -246,10 +284,10 @@ export default function RequestsTab() {
                       <MessageCircle size={15} />
                       Nhắn tin
                     </button>
-                    <button className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-blue-200 text-blue-600 text-sm hover:bg-blue-50 transition-colors">
+                    <a href={`tel:${selectedReq.contactPhone || selectedReq.userPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-blue-200 text-blue-600 text-sm hover:bg-blue-50 transition-colors">
                       <Phone size={15} />
                       Gọi điện
-                    </button>
+                    </a>
                   </div>
                   {selectedReq.status === "pending" && (
                     <button

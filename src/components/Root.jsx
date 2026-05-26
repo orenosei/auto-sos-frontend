@@ -43,6 +43,16 @@ export default function Root() {
   const [notifOpen, setNotifOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const avatarSource =
+    currentUser?.avatarUrl ||
+    (typeof currentUser?.avatar === "string" &&
+    /^(https?:\/\/|data:image\/|blob:)/i.test(currentUser.avatar)
+      ? currentUser.avatar
+      : "");
+  const avatarInitial =
+    !avatarSource && typeof currentUser?.avatar === "string" && currentUser.avatar.length <= 3
+      ? currentUser.avatar
+      : currentUser?.name?.slice(0, 1)?.toUpperCase() || "U";
 
   const navLinks = [
     { to: "/", label: "Trang chủ", icon: <Home size={16} /> },
@@ -190,9 +200,17 @@ export default function Root() {
               <div className="flex items-center gap-2">
                 {isLoggedIn ? (
                   <>
-                    <div className="w-8 h-8 rounded-full bg-linear-to-br from-pink-400 to-blue-400 flex items-center justify-center text-white text-sm font-bold">
-                      {currentUser?.avatar ?? "U"}
-                    </div>
+                    {avatarSource ? (
+                      <img
+                        src={avatarSource}
+                        alt={currentUser?.name || "Avatar"}
+                        className="h-8 w-8 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-linear-to-br from-pink-400 to-blue-400 flex items-center justify-center text-white text-sm font-bold">
+                        {avatarInitial}
+                      </div>
+                    )}
                     <button
                       onClick={() => { logout(); navigate("/login"); }}
                       className="hidden sm:flex items-center gap-1 text-sm text-gray-500 hover:text-red-500 transition-colors"

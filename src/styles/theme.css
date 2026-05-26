@@ -94,3 +94,29 @@ input:focus, textarea:focus, select:focus {
 .service-map-shell .leaflet-popup {
   z-index: 2;
 }
+
+.location-picker-map-shell {
+  isolation: isolate;
+}
+
+.location-picker-map-shell .leaflet-container {
+  z-index: 0;
+  background: #eef2f7;
+}
+
+.location-picker-map-shell .leaflet-pane,
+.location-picker-map-shell .leaflet-top,
+.location-picker-map-shell .leaflet-bottom {
+  z-index: 1;
+}
+
+.location-picker-map-shell .leaflet-control,
+.location-picker-map-shell .leaflet-popup {
+  z-index: 2;
+}
+
+.location-picker-map-shell .leaflet-tile,
+.location-picker-map-shell .leaflet-marker-icon,
+.location-picker-map-shell .leaflet-marker-shadow {
+  max-width: none;
+}
