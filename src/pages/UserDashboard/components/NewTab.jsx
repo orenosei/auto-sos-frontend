@@ -1,11 +1,12 @@
 import React from 'react';
 import { useUserDashboard } from '../UserDashboardContext';
-import { CheckCircle2, Loader2, Star, MapPin, X, Camera, Navigation, Send, Clock } from "lucide-react";
+import { CheckCircle2, Loader2, Star, MapPin, X, Camera, Send, Clock } from "lucide-react";
+import LocationPickerMap from "../../../components/LocationPickerMap";
 
 export default function NewTab() {
   const context = useUserDashboard();
   const { 
-    setActiveTab, companies, newReq, setNewReq, submittingRequest, gpsLoading, imageUploading, imageInputRef, availableRequestServices, selectedCompany, selectedCompanyService, companiesWithDistance, getGpsLocation, handleImageSelection, removeUploadedImage, submitRequest, serviceIconMap
+    setActiveTab, companies, newReq, setNewReq, submittingRequest, imageUploading, imageInputRef, availableRequestServices, selectedCompany, selectedCompanyService, companiesWithDistance, handleImageSelection, removeUploadedImage, submitRequest, serviceIconMap
   } = context;
 
   const openImagePicker = () => {
@@ -186,7 +187,7 @@ export default function NewTab() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Vị trí hiện tại <span className="text-red-400">*</span>
+                    Địa chỉ mô tả <span className="text-red-400">*</span>
                   </label>
                   <div className="relative">
                     <MapPin size={16} className="absolute left-3 top-3 text-pink-400" />
@@ -197,15 +198,28 @@ export default function NewTab() {
                       className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={getGpsLocation}
-                    disabled={gpsLoading}
-                    className="mt-1.5 text-xs text-blue-600 flex items-center gap-1 hover:text-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {gpsLoading ? <Loader2 size={12} className="animate-spin" /> : <Navigation size={12} />}
-                    {gpsLoading ? "Đang lấy GPS..." : "Dùng vị trí GPS hiện tại"}
-                  </button>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Chọn vị trí trên bản đồ <span className="text-red-400">*</span>
+                  </label>
+                  <LocationPickerMap
+                    lat={newReq.latitude}
+                    lng={newReq.longitude}
+                    onPick={(point) =>
+                      setNewReq({
+                        ...newReq,
+                        latitude: point.lat,
+                        longitude: point.lng,
+                      })
+                    }
+                  />
+                  <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                    <MapPin size={12} className="text-pink-400" />
+                    {Number.isFinite(newReq.latitude) && Number.isFinite(newReq.longitude)
+                      ? `${Number(newReq.latitude).toFixed(5)}, ${Number(newReq.longitude).toFixed(5)}`
+                      : "Nhấp vào bản đồ để chọn điểm gặp sự cố"}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -257,7 +271,15 @@ export default function NewTab() {
                   Quay lại
                 </button>
                 <button
-                  disabled={!newReq.selectedCompanyId || !newReq.description || !newReq.location || imageUploading || submittingRequest}
+                  disabled={
+                    !newReq.selectedCompanyId ||
+                    !newReq.description ||
+                    !newReq.location ||
+                    !Number.isFinite(newReq.latitude) ||
+                    !Number.isFinite(newReq.longitude) ||
+                    imageUploading ||
+                    submittingRequest
+                  }
                   onClick={async () => {
                     try {
                       await submitRequest();

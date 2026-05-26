@@ -26,7 +26,7 @@ import { useApp } from "../../context/useApp";
 import { getCompanies, getCompanyServices, getNearbyCompanies } from "../../api/companies";
 import { getServices } from "../../api/services";
 import { createRequest, getRequestServices, getRequests, updateRequestStatus } from "../../api/requests";
-import { addRequestImage, uploadRequestImageToCloudinary } from "../../api/requestImages";
+import { addRequestImage, getRequestImages, uploadRequestImageToCloudinary } from "../../api/requestImages";
 import RequestsTab from './components/RequestsTab';
 import NewTab from './components/NewTab';
 import TrackTab from './components/TrackTab';
@@ -191,6 +191,7 @@ export default function UserDashboard() {
         backend.map(async (r) => {
           let serviceType = "";
           let servicePrice = null;
+          let imageUrls = [];
           try {
             const svc = await getRequestServices(r.request_id);
             serviceType = svc.data?.[0]?.service_name ?? "";
@@ -199,20 +200,34 @@ export default function UserDashboard() {
             console.warn(err);
           }
 
+          try {
+            const images = await getRequestImages(r.request_id);
+            imageUrls = (images.data ?? []).map((image) => image.image_url).filter(Boolean);
+          } catch (err) {
+            console.warn(err);
+          }
+
           const companyName =
             r.company_id != null ? companyNameById?.get(String(r.company_id)) : undefined;
 
-          return toUiRequest(r, {
-            userName: currentUser?.name ?? "",
-            userPhone: currentUser?.phone ?? "",
-            companyName,
-            serviceType,
-            servicePrice,
-          });
+          return {
+            ...toUiRequest(r, {
+              userName: currentUser?.name ?? "",
+              userPhone: currentUser?.phone ?? "",
+              companyName,
+              serviceType,
+              servicePrice,
+            }),
+            imageUrls,
+          };
         })
       );
 
       setRequests(mapped);
+      setSelectedRequest((prev) => {
+        if (!prev) return prev;
+        return mapped.find((request) => request.id === prev.id) ?? prev;
+      });
     } finally {
       setLoadingRequests(false);
     }

@@ -5,7 +5,6 @@ import {
   Bell,
   Menu,
   X,
-  ChevronDown,
   LogOut,
   User,
   Building2,
@@ -18,28 +17,9 @@ import {
 import { useApp } from "../context/useApp";
 import { EmergencySOS } from "../pages/Emergency";
 
-const roleLabels = {
-  user: "Người dùng",
-  company: "Công ty cứu hộ",
-  admin: "Quản trị viên",
-};
-
-const roleIcons = {
-  user: <User size={16} />,
-  company: <Building2 size={16} />,
-  admin: <ShieldCheck size={16} />,
-};
-
-const roleBadgeColors = {
-  user: "bg-pink-100 text-pink-700",
-  company: "bg-blue-100 text-blue-700",
-  admin: "bg-purple-100 text-purple-700",
-};
-
 export default function Root() {
-  const { currentRole, setCurrentRole, notifications, markAllRead, unreadCount, isLoggedIn, logout, currentUser } = useApp();
+  const { currentRole, notifications, markAllRead, unreadCount, isLoggedIn, logout, currentUser } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [roleDropdown, setRoleDropdown] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -106,42 +86,10 @@ export default function Root() {
 
             {/* Right side */}
             <div className="flex items-center gap-2">
-              {/* Role switcher */}
-              <div className="relative hidden sm:block">
-                <button
-                  onClick={() => { setRoleDropdown(!roleDropdown); setNotifOpen(false); }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${roleBadgeColors[currentRole]} border-current/20`}
-                >
-                  {roleIcons[currentRole]}
-                  {roleLabels[currentRole]}
-                  <ChevronDown size={12} />
-                </button>
-                {roleDropdown && (
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-pink-100 overflow-hidden z-50">
-                    {["user", "company", "admin"].map((role) => (
-                      <button
-                        key={role}
-                        onClick={() => {
-                          setCurrentRole(role);
-                          setRoleDropdown(false);
-                          navigate(role === "user" ? "/dashboard" : role === "company" ? "/company" : "/admin");
-                        }}
-                        className={`w-full flex items-center gap-2 px-4 py-3 text-sm hover:bg-pink-50 transition-colors ${
-                          currentRole === role ? "text-pink-600 font-semibold bg-pink-50" : "text-gray-700"
-                        }`}
-                      >
-                        {roleIcons[role]}
-                        {roleLabels[role]}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
               {/* Notifications */}
               <div className="relative">
                 <button
-                  onClick={() => { setNotifOpen(!notifOpen); setRoleDropdown(false); }}
+                  onClick={() => setNotifOpen(!notifOpen)}
                   className="relative p-2 rounded-full hover:bg-pink-50 transition-colors"
                 >
                   <Bell size={20} className="text-gray-600" />
@@ -200,17 +148,23 @@ export default function Root() {
               <div className="flex items-center gap-2">
                 {isLoggedIn ? (
                   <>
-                    {avatarSource ? (
-                      <img
-                        src={avatarSource}
-                        alt={currentUser?.name || "Avatar"}
-                        className="h-8 w-8 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-linear-to-br from-pink-400 to-blue-400 flex items-center justify-center text-white text-sm font-bold">
-                        {avatarInitial}
-                      </div>
-                    )}
+                    <Link
+                      to={currentRole === "user" ? "/profile" : currentRole === "company" ? "/company" : "/admin"}
+                      className="block"
+                      title="Hồ sơ"
+                    >
+                      {avatarSource ? (
+                        <img
+                          src={avatarSource}
+                          alt={currentUser?.name || "Avatar"}
+                          className="h-8 w-8 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-linear-to-br from-pink-400 to-blue-400 flex items-center justify-center text-white text-sm font-bold">
+                          {avatarInitial}
+                        </div>
+                      )}
+                    </Link>
                     <button
                       onClick={() => { logout(); navigate("/login"); }}
                       className="hidden sm:flex items-center gap-1 text-sm text-gray-500 hover:text-red-500 transition-colors"
@@ -262,23 +216,16 @@ export default function Root() {
             <div className="pt-2 border-t border-pink-50">
               {isLoggedIn ? (
                 <>
-                  <p className="text-xs text-gray-400 px-4 mb-1">Chế độ xem:</p>
-                  {["user", "company", "admin"].map((role) => (
-                    <button
-                      key={role}
-                      onClick={() => {
-                        setCurrentRole(role);
-                        setMenuOpen(false);
-                        navigate(role === "user" ? "/dashboard" : role === "company" ? "/company" : "/admin");
-                      }}
-                      className={`w-full flex items-center gap-2 px-4 py-2 rounded-xl text-sm ${
-                        currentRole === role ? "text-pink-600 font-semibold" : "text-gray-600"
-                      }`}
+                  {currentRole === "user" && (
+                    <Link
+                      to="/profile"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-gray-600 hover:bg-pink-50 transition-colors"
                     >
-                      {roleIcons[role]}
-                      {roleLabels[role]}
-                    </button>
-                  ))}
+                      <User size={16} />
+                      Hồ sơ cá nhân
+                    </Link>
+                  )}
                   <button
                     onClick={() => { logout(); setMenuOpen(false); navigate("/login"); }}
                     className="w-full flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-red-500 hover:bg-red-50 transition-colors mt-1"

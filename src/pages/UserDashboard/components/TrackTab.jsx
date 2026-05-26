@@ -102,6 +102,29 @@ export default function TrackTab() {
                   )}
                 </div>
 
+                {selectedRequest.imageUrls?.length > 0 && (
+                  <div className="mt-4 border-t border-gray-100 pt-4">
+                    <p className="mb-2 text-sm font-semibold text-gray-800">Ảnh đã tải lên</p>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {selectedRequest.imageUrls.map((imageUrl, index) => (
+                        <a
+                          key={`${selectedRequest.id}-${imageUrl}`}
+                          href={imageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block overflow-hidden rounded-xl border border-pink-100 bg-pink-50"
+                        >
+                          <img
+                            src={imageUrl}
+                            alt={`Ảnh yêu cầu ${index + 1}`}
+                            className="h-24 w-full object-cover"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Review */}
                 {selectedRequest.rating && (
                   <div className="mt-4 pt-4 border-t border-gray-100 bg-yellow-50 rounded-xl p-3">
