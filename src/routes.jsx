@@ -7,6 +7,7 @@ import CompanyDashboard from "./pages/CompanyDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import Community from "./pages/Community";
 import Login from "./pages/Login";
+import UserProfile from "./pages/UserProfile";
 
 export const router = createBrowserRouter([
   {
@@ -16,6 +17,7 @@ export const router = createBrowserRouter([
       { index: true, Component: Home },
       { path: "find-services", Component: FindServices },
       { path: "dashboard", Component: UserDashboard },
+      { path: "profile", Component: UserProfile },
       { path: "company", Component: CompanyDashboard },
       { path: "admin", Component: AdminDashboard },
       { path: "community", Component: Community },

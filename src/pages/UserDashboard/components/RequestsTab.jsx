@@ -56,6 +56,27 @@ export default function RequestsTab() {
                     </div>
                   </div>
 
+                  {req.imageUrls?.length > 0 && (
+                    <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                      {req.imageUrls.map((imageUrl, index) => (
+                        <a
+                          key={`${req.id}-${imageUrl}`}
+                          href={imageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="block h-16 w-20 shrink-0 overflow-hidden rounded-xl border border-pink-100 bg-pink-50"
+                        >
+                          <img
+                            src={imageUrl}
+                            alt={`Ảnh yêu cầu ${index + 1}`}
+                            className="h-full w-full object-cover"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
                   {req.companyName && (
                     <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm text-gray-600">

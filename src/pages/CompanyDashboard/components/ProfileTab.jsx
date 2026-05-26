@@ -1,8 +1,9 @@
 import React from 'react';
 import { useCompanyDashboard } from '../CompanyDashboardContext';
-import { Camera, Edit, FileUp, X } from "lucide-react";
+import { Camera, Edit, FileUp, MapPin, X } from "lucide-react";
 import { updateCompany } from "../../../api/companies";
 import { uploadFileToCloudinary } from "../../../api/uploads";
+import LocationPickerMap from "../../../components/LocationPickerMap";
 
 export default function ProfileTab() {
   const context = useCompanyDashboard();
@@ -90,20 +91,6 @@ export default function ProfileTab() {
                     editable: true,
                   },
                   {
-                    key: "lat",
-                    label: "GPS (lat)",
-                    value: profileDraft.lat,
-                    editable: true,
-                    placeholder: "21.0278",
-                  },
-                  {
-                    key: "lng",
-                    label: "GPS (lng)",
-                    value: profileDraft.lng,
-                    editable: true,
-                    placeholder: "105.8342",
-                  },
-                  {
                     key: "verified",
                     label: "Trạng thái xác minh",
                     value: companyProfile?.verified ? "✅ Đã được xác minh" : "⏳ Chưa xác minh",
@@ -161,6 +148,30 @@ export default function ProfileTab() {
                     </div>
                   );
                 })}
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+                <div className="mb-3">
+                  <p className="text-sm font-semibold text-gray-800">Vị trí công ty trên bản đồ</p>
+                  <p className="text-xs text-gray-500">Nhấp vào bản đồ hoặc dùng vị trí hiện tại để cập nhật điểm cứu hộ.</p>
+                </div>
+                <LocationPickerMap
+                  lat={profileDraft.lat}
+                  lng={profileDraft.lng}
+                  onPick={(point) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      lat: String(point.lat),
+                      lng: String(point.lng),
+                    }))
+                  }
+                />
+                <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                  <MapPin size={12} className="text-blue-500" />
+                  {profileDraft.lat && profileDraft.lng
+                    ? `${Number(profileDraft.lat).toFixed(5)}, ${Number(profileDraft.lng).toFixed(5)}`
+                    : "Chưa chọn vị trí"}
+                </div>
               </div>
 
               <div className="mt-5 rounded-2xl border border-purple-100 bg-purple-50/50 p-4">

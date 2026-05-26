@@ -6,7 +6,7 @@ import LocationPickerMap from "../components/LocationPickerMap";
 import { uploadFileToCloudinary } from "../api/uploads";
 
 export default function Login() {
-  const { login, register, loginDemo } = useApp();
+  const { login, register } = useApp();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("login");
   const [selectedRole, setSelectedRole] = useState("user");
@@ -137,11 +137,6 @@ export default function Login() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleQuickDemo = (role) => {
-    loginDemo(role);
-    navigate("/");
   };
 
   const handleUpload = async (file, folder, onDone, fieldKey) => {
@@ -606,30 +601,6 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-gray-100" />
-            <span className="text-xs text-gray-400">HOẶC THỬ DEMO</span>
-            <div className="flex-1 h-px bg-gray-100" />
-          </div>
-
-          {/* Quick Demo */}
-          <div className="space-y-2">
-            <p className="text-xs text-gray-500 text-center mb-2">Truy cập nhanh (Demo)</p>
-            {roles.map((r) => (
-              <button
-                key={r.role}
-                onClick={() => handleQuickDemo(r.role)}
-                className="w-full flex items-center gap-2 py-2.5 px-4 rounded-xl border border-dashed border-gray-200 hover:border-pink-300 hover:bg-pink-50 transition-all text-sm text-gray-600 hover:text-pink-600"
-              >
-                {r.icon}
-                <span>
-                  Vào với vai trò <strong>{r.label}</strong>
-                </span>
-                <ArrowRight className="w-4 h-4 ml-auto" />
-              </button>
-            ))}
-          </div>
         </div>
       </div>
     </div>
