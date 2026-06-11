@@ -21,5 +21,5 @@ export async function deleteRequestImage(requestId, imageId) {
 }
 
 export async function uploadRequestImageToCloudinary(file) {
-  return uploadFileToCloudinary(file, "auto-sos/requests");
+  return uploadFileToCloudinary(file, "rescuesos/requests");
 }

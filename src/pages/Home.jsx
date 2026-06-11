@@ -35,10 +35,10 @@ const serviceIconMap = {
 
 const serviceColors = [
   "from-pink-400 to-pink-300",
-  "from-blue-400 to-blue-300",
+  "from-pink-400 to-pink-300",
   "from-purple-400 to-purple-300",
   "from-orange-400 to-orange-300",
-  "from-teal-400 to-teal-300",
+  "from-pink-400 to-pink-300",
   "from-red-400 to-red-300",
 ];
 
@@ -60,7 +60,7 @@ const howItWorks = [
     step: "02",
     title: "Nhập thông tin & Vị trí",
     desc: "Mô tả tình trạng xe và chia sẻ vị trí GPS của bạn.",
-    color: "bg-blue-100 text-blue-600",
+    color: "bg-pink-100 text-pink-600",
   },
   {
     step: "03",
@@ -121,7 +121,7 @@ export default function Home() {
     <div>
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-linear-to-br from-pink-100 via-pink-50 to-blue-100 opacity-70" />
+        <div className="absolute inset-0 bg-linear-to-br from-pink-100 via-pink-50 to-pink-100 opacity-70" />
         <div
           className="absolute inset-0 bg-cover bg-center opacity-10"
           style={{ backgroundImage: `url(${heroImg})` }}
@@ -135,7 +135,7 @@ export default function Home() {
               </div>
               <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-4">
                 Gặp sự cố xe?{" "}
-                <span className="bg-linear-to-r from-pink-500 to-blue-500 bg-clip-text text-transparent">
+                <span className="bg-linear-to-r from-pink-500 to-pink-500 bg-clip-text text-transparent">
                   Chúng tôi đến ngay!
                 </span>
               </h1>
@@ -153,7 +153,7 @@ export default function Home() {
                 </Link>
                 <Link
                   to="/find-services"
-                  className="flex items-center justify-center gap-2 bg-white text-blue-600 border border-blue-200 px-8 py-3.5 rounded-2xl font-semibold hover:bg-blue-50 transition-all"
+                  className="flex items-center justify-center gap-2 bg-white text-pink-600 border border-pink-200 px-8 py-3.5 rounded-2xl font-semibold hover:bg-pink-50 transition-all"
                 >
                   <MapPin size={18} />
                   Tìm dịch vụ gần nhất
@@ -164,7 +164,7 @@ export default function Home() {
                   {["A", "B", "C", "D"].map((l, i) => (
                     <div
                       key={i}
-                      className="w-8 h-8 rounded-full border-2 border-white bg-linear-to-br from-pink-300 to-blue-300 flex items-center justify-center text-white text-xs font-bold"
+                      className="w-8 h-8 rounded-full border-2 border-white bg-linear-to-br from-pink-300 to-pink-300 flex items-center justify-center text-white text-xs font-bold"
                     >
                       {l}
                     </div>
@@ -183,7 +183,7 @@ export default function Home() {
             <div className="hidden md:block">
               <div className="relative">
                 <div className="absolute -top-6 -left-6 w-72 h-72 bg-pink-200 rounded-full opacity-30 blur-3xl" />
-                <div className="absolute -bottom-6 -right-6 w-72 h-72 bg-blue-200 rounded-full opacity-30 blur-3xl" />
+                <div className="absolute -bottom-6 -right-6 w-72 h-72 bg-pink-200 rounded-full opacity-30 blur-3xl" />
                 <img
                   src={towImg}
                   alt="Tow truck"
@@ -199,11 +199,11 @@ export default function Home() {
                     <p className="text-sm font-semibold text-gray-800">Vá lốp thành công</p>
                   </div>
                 </div>
-                <div className="absolute -top-4 -right-4 bg-white rounded-2xl shadow-xl p-3 flex items-center gap-2 border border-blue-100">
-                  <Clock size={16} className="text-blue-500" />
+                <div className="absolute -top-4 -right-4 bg-white rounded-2xl shadow-xl p-3 flex items-center gap-2 border border-pink-100">
+                  <Clock size={16} className="text-pink-500" />
                   <div>
                     <p className="text-xs text-gray-500">Thời gian đến</p>
-                    <p className="text-sm font-semibold text-blue-600">~15 phút</p>
+                    <p className="text-sm font-semibold text-pink-600">~15 phút</p>
                   </div>
                 </div>
               </div>
@@ -219,7 +219,7 @@ export default function Home() {
             {stats.map((s, i) => (
               <div key={i} className="text-center">
                 <div className="flex justify-center mb-2">
-                  <div className="w-10 h-10 rounded-xl bg-linear-to-br from-pink-100 to-blue-100 flex items-center justify-center text-pink-600">
+                  <div className="w-10 h-10 rounded-xl bg-linear-to-br from-pink-100 to-pink-100 flex items-center justify-center text-pink-600">
                     {s.icon}
                   </div>
                 </div>
@@ -261,7 +261,7 @@ export default function Home() {
       </section>
 
       {/* How it works */}
-      <section className="py-16 bg-linear-to-br from-pink-50 to-blue-50">
+      <section className="py-16 bg-linear-to-br from-pink-50 to-pink-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
             <h2 className="text-3xl font-bold text-gray-900 mb-3">Cách thức hoạt động</h2>
@@ -271,7 +271,7 @@ export default function Home() {
             {howItWorks.map((step, i) => (
               <div key={i} className="relative">
                 {i < howItWorks.length - 1 && (
-                  <div className="hidden lg:block absolute top-8 left-full w-full h-0.5 bg-linear-to-r from-pink-200 to-blue-200 z-0" />
+                  <div className="hidden lg:block absolute top-8 left-full w-full h-0.5 bg-linear-to-r from-pink-200 to-pink-200 z-0" />
                 )}
                 <div className="relative bg-white rounded-2xl p-6 border border-pink-100 shadow-sm hover:shadow-md transition-shadow">
                   <div className={`w-12 h-12 rounded-2xl ${step.color} flex items-center justify-center font-bold text-lg mb-4`}>
@@ -317,11 +317,11 @@ export default function Home() {
               className="group bg-white rounded-2xl border border-pink-100 p-5 hover:border-pink-300 hover:shadow-lg hover:shadow-pink-100 transition-all"
             >
               <div className="flex items-start justify-between mb-3">
-                <div className="w-12 h-12 rounded-xl bg-linear-to-br from-pink-100 to-blue-100 flex items-center justify-center text-2xl">
+                <div className="w-12 h-12 rounded-xl bg-linear-to-br from-pink-100 to-pink-100 flex items-center justify-center text-2xl">
                   🚑
                 </div>
                 {company.verified && (
-                  <span className="flex items-center gap-1 text-[10px] font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                  <span className="flex items-center gap-1 text-[10px] font-medium text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full">
                     <Shield size={10} />
                     Đã xác minh
                   </span>
@@ -339,7 +339,7 @@ export default function Home() {
                 <MapPin size={12} className="text-pink-400" />
                 {company.operatingArea}
               </div>
-              <div className="flex items-center gap-1 text-xs text-blue-600">
+              <div className="flex items-center gap-1 text-xs text-pink-600">
                 <Clock size={12} />
                 Đến nơi trong ~{company.responseTime} phút
               </div>
@@ -349,7 +349,7 @@ export default function Home() {
       </section>
 
       {/* Features */}
-      <section className="py-16 bg-linear-to-br from-blue-50 to-pink-50">
+      <section className="py-16 bg-linear-to-br from-pink-50 to-pink-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
@@ -362,14 +362,14 @@ export default function Home() {
             <div>
               <h2 className="text-3xl font-bold text-gray-900 mb-6">
                 Tại sao chọn{" "}
-                <span className="bg-linear-to-r from-pink-500 to-blue-500 bg-clip-text text-transparent">
-                  RescueGo?
+                <span className="bg-linear-to-r from-pink-500 to-pink-500 bg-clip-text text-transparent">
+                  RescueSOS?
                 </span>
               </h2>
               <div className="space-y-4">
                 {[
                   { icon: <Clock size={20} className="text-pink-500" />, title: "Phản hồi nhanh 24/7", desc: "Đội ngũ cứu hộ sẵn sàng phục vụ mọi lúc, mọi nơi." },
-                  { icon: <Shield size={20} className="text-blue-500" />, title: "Đơn vị uy tín, được xác minh", desc: "Tất cả công ty cứu hộ đều được kiểm tra giấy phép và xác minh danh tính." },
+                  { icon: <Shield size={20} className="text-pink-500" />, title: "Đơn vị uy tín, được xác minh", desc: "Tất cả công ty cứu hộ đều được kiểm tra giấy phép và xác minh danh tính." },
                   { icon: <Star size={20} className="text-yellow-500" />, title: "Đánh giá minh bạch", desc: "Xem đánh giá thực từ người dùng trước để chọn dịch vụ phù hợp." },
                   { icon: <MapPin size={20} className="text-green-500" />, title: "Theo dõi thời gian thực", desc: "Biết chính xác khi nào kỹ thuật viên đến nơi bạn đang chờ." },
                 ].map((f, i) => (
@@ -391,7 +391,7 @@ export default function Home() {
 
       {/* CTA Banner */}
       <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-linear-to-r from-pink-500 via-pink-400 to-blue-400 rounded-3xl p-8 md:p-12 text-center text-white shadow-2xl shadow-pink-200 relative overflow-hidden">
+        <div className="bg-linear-to-r from-pink-500 via-pink-400 to-pink-400 rounded-3xl p-8 md:p-12 text-center text-white shadow-2xl shadow-pink-200 relative overflow-hidden">
           <div className="absolute -top-10 -left-10 w-40 h-40 bg-white/10 rounded-full" />
           <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/10 rounded-full" />
           <div className="relative">
@@ -399,7 +399,7 @@ export default function Home() {
               Bạn là công ty cứu hộ?
             </h2>
             <p className="text-pink-100 mb-6 max-w-xl mx-auto">
-              Tham gia mạng lưới RescueGo để tiếp cận hàng ngàn khách hàng cần hỗ trợ mỗi ngày.
+              Tham gia mạng lưới RescueSOS để tiếp cận hàng ngàn khách hàng cần hỗ trợ mỗi ngày.
             </p>
             <Link
               to="/company"

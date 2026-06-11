@@ -29,7 +29,7 @@ export default function ProfileTab() {
             <div className="text-sm text-gray-500">Đang tải hồ sơ...</div>
           ) : (
             <>
-              <div className="mb-5 flex items-center gap-4 rounded-2xl border border-blue-50 bg-blue-50/60 p-4">
+              <div className="mb-5 flex items-center gap-4 rounded-2xl border border-pink-50 bg-pink-50/60 p-4">
                 {profileDraft.avatar_url ? (
                   <img src={profileDraft.avatar_url} alt="Avatar công ty" className="h-16 w-16 rounded-2xl object-cover" />
                 ) : (
@@ -39,7 +39,7 @@ export default function ProfileTab() {
                 )}
                 <div>
                   <p className="text-sm font-semibold text-gray-800">Avatar công ty</p>
-                  <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50">
+                  <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-pink-200 bg-white px-3 py-2 text-xs font-medium text-pink-600 hover:bg-pink-50">
                     <Camera size={14} />
                     Tải ảnh mới
                     <input
@@ -47,7 +47,7 @@ export default function ProfileTab() {
                       accept="image/*"
                       className="hidden"
                       onChange={(e) =>
-                        uploadProfileFile(e.target.files?.[0], "auto-sos/avatars", (url) =>
+                        uploadProfileFile(e.target.files?.[0], "rescuesos/avatars", (url) =>
                           setProfileDraft((prev) => ({ ...prev, avatar_url: url }))
                         )
                       }
@@ -121,7 +121,7 @@ export default function ProfileTab() {
                                 [field.key]: e.target.value,
                               }))
                             }
-                            className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                            className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition-all"
                           />
                         ) : (
                           <p className="text-sm font-medium text-gray-800 mt-0.5">
@@ -139,7 +139,7 @@ export default function ProfileTab() {
                               [field.key]: !prev[field.key],
                             }))
                           }
-                          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 shrink-0"
+                          className="text-xs text-pink-600 hover:text-pink-700 flex items-center gap-1 shrink-0"
                         >
                           <Edit size={12} />
                           {isEditing ? "Xong" : "Sửa"}
@@ -150,7 +150,7 @@ export default function ProfileTab() {
                 })}
               </div>
 
-              <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+              <div className="mt-5 rounded-2xl border border-pink-100 bg-pink-50/40 p-4">
                 <div className="mb-3">
                   <p className="text-sm font-semibold text-gray-800">Vị trí công ty trên bản đồ</p>
                   <p className="text-xs text-gray-500">Nhấp vào bản đồ hoặc dùng vị trí hiện tại để cập nhật điểm cứu hộ.</p>
@@ -167,7 +167,7 @@ export default function ProfileTab() {
                   }
                 />
                 <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-                  <MapPin size={12} className="text-blue-500" />
+                  <MapPin size={12} className="text-pink-500" />
                   {profileDraft.lat && profileDraft.lng
                     ? `${Number(profileDraft.lat).toFixed(5)}, ${Number(profileDraft.lng).toFixed(5)}`
                     : "Chưa chọn vị trí"}
@@ -191,7 +191,7 @@ export default function ProfileTab() {
                       onChange={async (e) => {
                         const files = Array.from(e.target.files ?? []);
                         for (const file of files) {
-                          await uploadProfileFile(file, "auto-sos/company-documents", (url) =>
+                          await uploadProfileFile(file, "rescuesos/company-documents", (url) =>
                             setProfileDraft((prev) => ({
                               ...prev,
                               verification_document_urls: [
@@ -211,7 +211,7 @@ export default function ProfileTab() {
                   ) : (
                     profileDraft.verification_document_urls.map((url, index) => (
                       <div key={url} className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs">
-                        <a href={url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-blue-600 hover:underline">
+                        <a href={url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-pink-600 hover:underline">
                           Tài liệu {index + 1}
                         </a>
                         <button
@@ -319,7 +319,7 @@ export default function ProfileTab() {
                     setSavingProfile(false);
                   }
                 }}
-                className="mt-6 w-full bg-linear-to-r from-blue-500 to-blue-400 text-white py-3 rounded-xl font-semibold hover:shadow-md hover:shadow-blue-200 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                className="mt-6 w-full bg-linear-to-r from-pink-500 to-pink-400 text-white py-3 rounded-xl font-semibold hover:shadow-md hover:shadow-pink-200 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {savingProfile ? "Đang lưu..." : "Lưu thay đổi"}
               </button>

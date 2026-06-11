@@ -15,7 +15,7 @@ export default function OverviewTab() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { label: "Tổng yêu cầu", value: computedStats.totalRequests.toLocaleString(), icon: <Car size={20} />, color: "from-pink-100 to-pink-50", text: "text-pink-600", sub: `${computedStats.completedRequests} hoàn tất` },
-              { label: "Người dùng", value: computedStats.totalUsers.toLocaleString(), icon: <Users size={20} />, color: "from-blue-100 to-blue-50", text: "text-blue-600", sub: "" },
+              { label: "Người dùng", value: computedStats.totalUsers.toLocaleString(), icon: <Users size={20} />, color: "from-pink-100 to-pink-50", text: "text-pink-600", sub: "" },
               { label: "Công ty đối tác", value: computedStats.totalCompanies, icon: <Building2 size={20} />, color: "from-purple-100 to-purple-50", text: "text-purple-600", sub: `${computedStats.verifiedCompanies} đã xác minh` },
               { label: "Doanh thu", value: `${Math.round(computedStats.totalRevenue / 1000000).toLocaleString("vi-VN")}M`, icon: <Star size={20} />, color: "from-yellow-100 to-yellow-50", text: "text-yellow-600", sub: "Từ request hoàn tất" },
             ].map((card, i) => (
@@ -42,7 +42,7 @@ export default function OverviewTab() {
                   <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ borderRadius: "12px", border: "1px solid #fce7f3", fontSize: "12px" }} />
                   <Bar dataKey="requests" fill="#f472b6" radius={[4, 4, 0, 0]} name="Yêu cầu" />
-                  <Bar dataKey="completed" fill="#60a5fa" radius={[4, 4, 0, 0]} name="Hoàn tất" />
+                  <Bar dataKey="completed" fill="#f472b6" radius={[4, 4, 0, 0]} name="Hoàn tất" />
                 </BarChart>
               </ResponsiveContainer>
             </div>

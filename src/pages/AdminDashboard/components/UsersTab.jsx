@@ -50,7 +50,7 @@ export default function UsersTab() {
                       <tr key={user.id} className="border-b border-gray-50 hover:bg-pink-50/30 transition-colors">
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-linear-to-br from-pink-300 to-blue-300 flex items-center justify-center text-white text-xs font-bold">
+                            <div className="w-8 h-8 rounded-full bg-linear-to-br from-pink-300 to-pink-300 flex items-center justify-center text-white text-xs font-bold">
                               {user.name[0]}
                             </div>
                             <span className="text-sm font-medium text-gray-800">{user.name}</span>
@@ -77,7 +77,7 @@ export default function UsersTab() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
-                            <button className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 transition-colors">
+                            <button className="p-1.5 rounded-lg hover:bg-pink-50 text-pink-500 transition-colors">
                               <Eye size={14} />
                             </button>
                             <button

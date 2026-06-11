@@ -6,7 +6,7 @@ import { toUiUser } from "../api/mappers";
 import { getNotifications, markNotificationRead } from "../api/notifications";
 
 export function AppProvider({ children }) {
-  const storageKey = "auto-sos.auth";
+  const storageKey = "rescuesos.auth";
 
   const [currentRole, setCurrentRoleState] = useState(() => {
     try {

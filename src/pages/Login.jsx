@@ -159,8 +159,8 @@ export default function Login() {
       icon: "bg-pink-100 text-pink-600",
     },
     blue: {
-      border: "border-blue-500 bg-blue-50",
-      icon: "bg-blue-100 text-blue-600",
+      border: "border-pink-500 bg-pink-50",
+      icon: "bg-pink-100 text-pink-600",
     },
     purple: {
       border: "border-purple-500 bg-purple-50",
@@ -169,14 +169,14 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center bg-linear-to-br from-pink-50 to-blue-50 py-12 px-4">
+    <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center bg-linear-to-br from-pink-50 to-pink-50 py-12 px-4">
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-linear-to-br from-pink-500 to-blue-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+          <div className="w-14 h-14 bg-linear-to-br from-pink-500 to-pink-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <Car className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Chào mừng đến RescueGo</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Chào mừng đến RescueSOS</h1>
           <p className="text-gray-500 mt-1.5 text-sm">Hệ thống hỗ trợ sự cố xe trên đường</p>
         </div>
 
@@ -390,7 +390,7 @@ export default function Login() {
 
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-1.5 block">Logo / avatar công ty</label>
-                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-blue-200 px-4 py-3 text-sm text-blue-600 hover:bg-blue-50">
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-pink-200 px-4 py-3 text-sm text-pink-600 hover:bg-pink-50">
                     <Camera size={16} />
                     <span>{uploadingField === "company_avatar" ? "Đang tải..." : "Tải ảnh đại diện"}</span>
                     <input
@@ -400,7 +400,7 @@ export default function Login() {
                       onChange={(e) =>
                         handleUpload(
                           e.target.files?.[0],
-                          "auto-sos/avatars",
+                          "rescuesos/avatars",
                           (url) => setCompanyRegisterForm((f) => ({ ...f, avatar_url: url })),
                           "company_avatar"
                         )
@@ -427,7 +427,7 @@ export default function Login() {
                         for (const file of files) {
                           await handleUpload(
                             file,
-                            "auto-sos/company-documents",
+                            "rescuesos/company-documents",
                             (url) =>
                               setCompanyRegisterForm((f) => ({
                                 ...f,
@@ -442,7 +442,7 @@ export default function Login() {
                   {companyRegisterForm.verification_document_urls.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {companyRegisterForm.verification_document_urls.map((url, index) => (
-                        <a key={url} href={url} target="_blank" rel="noreferrer" className="block truncate text-xs text-blue-600 hover:underline">
+                        <a key={url} href={url} target="_blank" rel="noreferrer" className="block truncate text-xs text-pink-600 hover:underline">
                           Tài liệu {index + 1}
                         </a>
                       ))}
@@ -545,7 +545,7 @@ export default function Login() {
                       onChange={(e) =>
                         handleUpload(
                           e.target.files?.[0],
-                          "auto-sos/avatars",
+                          "rescuesos/avatars",
                           (url) => setUserRegisterForm((f) => ({ ...f, avatar_url: url })),
                           "user_avatar"
                         )

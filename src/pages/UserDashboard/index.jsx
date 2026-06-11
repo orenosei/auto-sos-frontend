@@ -41,9 +41,9 @@ import { reverseGeocode, formatAddress, calculateDistance, calculateETA } from "
 
 const statusConfig = {
   pending: { label: "Chờ tiếp nhận", color: "text-yellow-600 bg-yellow-50 border-yellow-200", icon: <Clock size={14} /> },
-  accepted: { label: "Đã tiếp nhận", color: "text-blue-600 bg-blue-50 border-blue-200", icon: <AlertCircle size={14} /> },
-  heading: { label: "Đang di chuyển", color: "text-indigo-600 bg-indigo-50 border-indigo-200", icon: <Navigation size={14} /> },
-  arrived: { label: "Đã đến nơi", color: "text-cyan-600 bg-cyan-50 border-cyan-200", icon: <MapPin size={14} /> },
+  accepted: { label: "Đã tiếp nhận", color: "text-pink-600 bg-pink-50 border-pink-200", icon: <AlertCircle size={14} /> },
+  heading: { label: "Đang di chuyển", color: "text-pink-600 bg-pink-50 border-pink-200", icon: <Navigation size={14} /> },
+  arrived: { label: "Đã đến nơi", color: "text-pink-600 bg-pink-50 border-pink-200", icon: <MapPin size={14} /> },
   processing: { label: "Đang xử lý", color: "text-purple-600 bg-purple-50 border-purple-200", icon: <Loader2 size={14} className="animate-spin" /> },
   completed: { label: "Hoàn tất", color: "text-green-600 bg-green-50 border-green-200", icon: <CheckCircle2 size={14} /> },
   cancelled: { label: "Đã hủy", color: "text-gray-500 bg-gray-50 border-gray-200", icon: <XCircle size={14} /> },
@@ -53,14 +53,14 @@ const activeStatuses = new Set(["accepted", "heading", "arrived", "processing"])
 
 const serviceIconMap = {
   "Vá lốp / Thay lốp": <Wrench size={20} className="text-pink-500" />,
-  "Kéo xe / Cẩu xe": <Car size={20} className="text-blue-500" />,
+  "Kéo xe / Cẩu xe": <Car size={20} className="text-pink-500" />,
   "Thay / Nạp ắc quy": <Zap size={20} className="text-purple-500" />,
   "Nạp nhiên liệu": <Fuel size={20} className="text-orange-500" />,
-  "Sửa chữa tại chỗ": <Wrench size={20} className="text-teal-500" />,
+  "Sửa chữa tại chỗ": <Wrench size={20} className="text-pink-500" />,
   "Hỗ trợ tai nạn": <AlertTriangle size={20} className="text-red-500" />,
 };
 
-const SELECTED_COMPANY_STORAGE_KEY = "auto-sos:selected-company-id";
+const SELECTED_COMPANY_STORAGE_KEY = "rescuesos:selected-company-id";
 
 export default function UserDashboard() {
   const { currentUser, isLoggedIn, updateCurrentUser } = useApp();
@@ -568,7 +568,7 @@ export default function UserDashboard() {
     if (!file || !userId) return;
     setUploadingAvatar(true);
     try {
-      const uploaded = await uploadFileToCloudinary(file, "auto-sos/avatars");
+      const uploaded = await uploadFileToCloudinary(file, "rescuesos/avatars");
       const updated = await updateUser(userId, { avatar_url: uploaded.secureUrl });
       updateCurrentUser({
         avatar: currentUser?.name?.slice(0, 1)?.toUpperCase() || currentUser?.avatar || "U",

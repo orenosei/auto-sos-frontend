@@ -23,7 +23,7 @@ export default function StatsTab() {
                   contentStyle={{ borderRadius: "12px", border: "1px solid #fce7f3", fontSize: "12px" }}
                 />
                 <Bar key="bar-requests" dataKey="requests" fill="#f472b6" radius={[6, 6, 0, 0]} name="Yêu cầu" />
-                <Bar key="bar-completed" dataKey="completed" fill="#60a5fa" radius={[6, 6, 0, 0]} name="Hoàn tất" />
+                <Bar key="bar-completed" dataKey="completed" fill="#f472b6" radius={[6, 6, 0, 0]} name="Hoàn tất" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -50,7 +50,7 @@ export default function StatsTab() {
             </div>
             <div className="bg-white rounded-2xl border border-pink-100 p-5">
               <div className="flex items-center gap-2 mb-2">
-                <Clock size={18} className="text-blue-500" />
+                <Clock size={18} className="text-pink-500" />
                 <span className="font-semibold text-gray-700">Thời gian phản hồi</span>
               </div>
               <p className="text-3xl font-bold text-gray-900">

@@ -80,10 +80,10 @@ export default function RequestsTab() {
                   {req.companyName && (
                     <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs">🚑</div>
+                        <div className="w-6 h-6 rounded-full bg-pink-100 flex items-center justify-center text-xs">🚑</div>
                         {req.companyName}
                         {req.estimatedTime && (
-                          <span className="text-xs text-blue-500">· ~{req.estimatedTime} phút</span>
+                          <span className="text-xs text-pink-500">· ~{req.estimatedTime} phút</span>
                         )}
                       </div>
                       <div className="flex items-center gap-2">

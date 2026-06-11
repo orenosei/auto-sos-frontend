@@ -77,12 +77,13 @@ export function Layout({ children }) {
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2">
-              <div className="w-9 h-9 bg-linear-to-br from-pink-500 to-blue-400 rounded-xl flex items-center justify-center shadow-md">
+              <div className="w-9 h-9 bg-linear-to-br from-pink-500 to-pink-400 rounded-xl flex items-center justify-center shadow-md">
                 <Car className="w-5 h-5 text-white" />
               </div>
               <div className="hidden sm:block">
-                <span className="text-pink-600 font-bold text-lg">Rescue</span>
-                <span className="text-blue-500 font-bold text-lg">Go</span>
+                <span className="text-pink-600 font-bold text-lg">RescueS</span>
+                <span className="text-blue-500 font-bold text-lg">O</span>
+                <span className="text-pink-600 font-bold text-lg">S</span>
                 <span className="block text-gray-400 text-xs leading-none">Cứu hộ tận nơi</span>
               </div>
             </Link>
@@ -135,7 +136,7 @@ export function Layout({ children }) {
                           className="h-8 w-8 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="w-8 h-8 bg-linear-to-br from-pink-400 to-blue-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                        <div className="w-8 h-8 bg-linear-to-br from-pink-400 to-pink-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
                           {avatarInitial}
                         </div>
                       )}

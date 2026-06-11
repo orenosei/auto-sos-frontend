@@ -279,7 +279,7 @@ export default function FindServices() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="w-full appearance-none pl-4 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 cursor-pointer"
+              className="w-full appearance-none pl-4 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 cursor-pointer"
             >
               <option value="distance">Gần nhất</option>
               <option value="rating">Đánh giá cao nhất</option>
@@ -290,7 +290,7 @@ export default function FindServices() {
 
           <button
             onClick={() => setShowFilter(!showFilter)}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 border border-blue-200 text-blue-600 rounded-xl text-sm hover:bg-blue-50 transition-colors"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 border border-pink-200 text-pink-600 rounded-xl text-sm hover:bg-pink-50 transition-colors"
           >
             <Filter size={16} />
             Bộ lọc
@@ -350,7 +350,7 @@ export default function FindServices() {
                 className="bg-white rounded-2xl border border-pink-100 p-5 hover:border-pink-300 hover:shadow-lg hover:shadow-pink-50 transition-all"
               >
                 <div className="flex items-start gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-pink-100 to-blue-100 flex items-center justify-center text-3xl shrink-0">
+                  <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-pink-100 to-pink-100 flex items-center justify-center text-3xl shrink-0">
                     🚑
                   </div>
                   <div className="flex-1 min-w-0">
@@ -359,7 +359,7 @@ export default function FindServices() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-bold text-gray-900">{company.name}</h3>
                           {company.verified && (
-                            <span className="flex items-center gap-1 text-[10px] font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                            <span className="flex items-center gap-1 text-[10px] font-medium text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full">
                               <Shield size={10} />
                               Đã xác minh
                             </span>
@@ -393,7 +393,7 @@ export default function FindServices() {
                         {company.address || "Chưa cập nhật địa chỉ"}
                       </span>
                       <span className="flex items-center gap-1">
-                        <Clock size={12} className="text-blue-400" />
+                        <Clock size={12} className="text-pink-400" />
                         {(() => {
                           const distance = getCompanyDistanceKm(company);
                           const eta = Number.isFinite(distance) ? calculateETA(distance) : null;
@@ -435,7 +435,7 @@ export default function FindServices() {
                       >
                         Gửi yêu cầu
                       </Link>
-                      <button className="flex items-center gap-1 px-4 py-2 border border-blue-200 text-blue-600 text-sm rounded-xl hover:bg-blue-50 transition-colors">
+                      <button className="flex items-center gap-1 px-4 py-2 border border-pink-200 text-pink-600 text-sm rounded-xl hover:bg-pink-50 transition-colors">
                         <Phone size={14} />
                         Gọi ngay
                       </button>

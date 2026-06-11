@@ -63,7 +63,7 @@ export default function RequestsTab() {
                           {new Date(req.createdAt).toLocaleDateString("vi-VN")}
                         </td>
                         <td className="px-4 py-3">
-                          <button className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 transition-colors">
+                          <button className="p-1.5 rounded-lg hover:bg-pink-50 text-pink-500 transition-colors">
                             <Eye size={14} />
                           </button>
                         </td>

@@ -38,13 +38,13 @@ import {
   Legend,
 } from "recharts";
 
-const PIE_COLORS = ["#f472b6", "#60a5fa", "#a78bfa", "#fb923c", "#34d399"];
+const PIE_COLORS = ["#f472b6", "#f472b6", "#a78bfa", "#fb923c", "#34d399"];
 
 const statusConfig = {
   pending: { label: "Chờ tiếp nhận", color: "text-yellow-600 bg-yellow-50 border-yellow-200" },
-  accepted: { label: "Đã tiếp nhận", color: "text-blue-600 bg-blue-50 border-blue-200" },
-  heading: { label: "Đang di chuyển", color: "text-indigo-600 bg-indigo-50 border-indigo-200" },
-  arrived: { label: "Đã đến nơi", color: "text-cyan-600 bg-cyan-50 border-cyan-200" },
+  accepted: { label: "Đã tiếp nhận", color: "text-pink-600 bg-pink-50 border-pink-200" },
+  heading: { label: "Đang di chuyển", color: "text-pink-600 bg-pink-50 border-pink-200" },
+  arrived: { label: "Đã đến nơi", color: "text-pink-600 bg-pink-50 border-pink-200" },
   processing: { label: "Đang xử lý", color: "text-purple-600 bg-purple-50 border-purple-200" },
   completed: { label: "Hoàn tất", color: "text-green-600 bg-green-50 border-green-200" },
   cancelled: { label: "Đã hủy", color: "text-gray-500 bg-gray-50 border-gray-200" },
@@ -272,7 +272,7 @@ export default function AdminDashboard() {
       <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Bảng điều khiển quản trị</h1>
-          <p className="text-gray-500 text-sm">Quản lý và giám sát hệ thống RescueGo</p>
+          <p className="text-gray-500 text-sm">Quản lý và giám sát hệ thống RescueSOS</p>
         </div>
         <div className="flex items-center gap-2 bg-purple-50 border border-purple-200 rounded-xl px-4 py-2">
           <ShieldCheck size={16} className="text-purple-600" />

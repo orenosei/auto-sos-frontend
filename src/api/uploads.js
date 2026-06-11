@@ -1,6 +1,6 @@
 import { apiRequest } from "./http";
 
-export async function getCloudinaryUploadSignature(folder = "auto-sos/requests") {
+export async function getCloudinaryUploadSignature(folder = "rescuesos/requests") {
   const res = await apiRequest("/api/requests/cloudinary/signature", {
     method: "POST",
     body: { folder },
@@ -9,7 +9,7 @@ export async function getCloudinaryUploadSignature(folder = "auto-sos/requests")
   return res.data;
 }
 
-export async function uploadFileToCloudinary(file, folder = "auto-sos/requests") {
+export async function uploadFileToCloudinary(file, folder = "rescuesos/requests") {
   const signature = await getCloudinaryUploadSignature(folder);
 
   const formData = new FormData();

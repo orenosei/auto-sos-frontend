@@ -21,7 +21,7 @@ export default function VehiclesTab() {
                 resetVehicleDraft();
                 setVehicleFormOpen((v) => !v);
               }}
-              className="flex items-center gap-1.5 bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-600 transition-colors"
+              className="flex items-center gap-1.5 bg-pink-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-pink-600 transition-colors"
             >
               <Plus size={16} />
               Thêm phương tiện
@@ -29,7 +29,7 @@ export default function VehiclesTab() {
           </div>
 
           {vehicleFormOpen && (
-            <div className="bg-white rounded-2xl border border-blue-100 p-5 mb-4">
+            <div className="bg-white rounded-2xl border border-pink-100 p-5 mb-4">
               <h3 className="font-semibold text-gray-800 mb-3">
                 {editingVehicleId ? "Cập nhật phương tiện" : "Thêm phương tiện mới"}
               </h3>
@@ -39,7 +39,7 @@ export default function VehiclesTab() {
                   <input
                     value={vehicleDraft.vehicle_license}
                     onChange={(e) => setVehicleDraft((prev) => ({ ...prev, vehicle_license: e.target.value }))}
-                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
                     placeholder="Ví dụ: 30A-12345"
                   />
                 </div>
@@ -48,7 +48,7 @@ export default function VehiclesTab() {
                   <input
                     value={vehicleDraft.vehicle_type}
                     onChange={(e) => setVehicleDraft((prev) => ({ ...prev, vehicle_type: e.target.value }))}
-                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
                     placeholder="Xe kéo, xe kỹ thuật..."
                   />
                 </div>
@@ -57,7 +57,7 @@ export default function VehiclesTab() {
                   <select
                     value={vehicleDraft.vehicle_status}
                     onChange={(e) => setVehicleDraft((prev) => ({ ...prev, vehicle_status: e.target.value }))}
-                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 bg-white"
+                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 bg-white"
                   >
                     <option value="available">Sẵn sàng</option>
                     <option value="busy">Đang bận</option>
@@ -69,7 +69,7 @@ export default function VehiclesTab() {
                   <input
                     value={vehicleDraft.equipment_description}
                     onChange={(e) => setVehicleDraft((prev) => ({ ...prev, equipment_description: e.target.value }))}
-                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
                     placeholder="Cẩu kéo, kích lốp, bình kích điện..."
                   />
                 </div>
@@ -79,7 +79,7 @@ export default function VehiclesTab() {
                   type="button"
                   disabled={savingVehicle}
                   onClick={handleSaveVehicle}
-                  className="bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="bg-pink-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-pink-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {savingVehicle ? "Đang lưu..." : editingVehicleId ? "Lưu thay đổi" : "Thêm"}
                 </button>
@@ -116,14 +116,14 @@ export default function VehiclesTab() {
               return (
                 <div key={vehicle.vehicle_id} className="bg-white rounded-2xl border border-pink-100 p-5 hover:shadow-md hover:shadow-pink-50 transition-all">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500">
+                    <div className="w-11 h-11 rounded-xl bg-pink-50 flex items-center justify-center text-pink-500">
                       <Car size={22} />
                     </div>
                     <div className="flex gap-1">
                       <button
                         type="button"
                         onClick={() => startEditVehicle(vehicle)}
-                        className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 transition-colors"
+                        className="p-1.5 rounded-lg hover:bg-pink-50 text-pink-500 transition-colors"
                       >
                         <Edit size={14} />
                       </button>
@@ -153,7 +153,7 @@ export default function VehiclesTab() {
 
           {vehicles.length === 0 && (
             <div className="bg-white rounded-2xl border border-pink-100 p-8 text-center">
-              <Car size={40} className="text-blue-200 mx-auto mb-3" />
+              <Car size={40} className="text-pink-200 mx-auto mb-3" />
               <p className="text-gray-400 text-sm">Chưa có phương tiện cứu hộ nào</p>
             </div>
           )}

@@ -49,19 +49,21 @@ export default function Root() {
     to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-pink-50 via-white to-blue-50">
+    <div className="min-h-screen bg-linear-to-br from-pink-50 via-white to-pink-50">
       {/* Navbar */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-pink-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 group">
-              <div className="w-9 h-9 rounded-xl bg-linear-to-br from-pink-400 to-blue-400 flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+              <div className="w-9 h-9 rounded-xl bg-linear-to-br from-pink-400 to-pink-400 flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
                 <Car size={20} className="text-white" />
               </div>
               <div className="hidden sm:block">
                 <span className="font-bold text-pink-600 text-lg leading-none">Rescue</span>
-                <span className="font-bold text-blue-500 text-lg leading-none">Go</span>
+                <span className="font-bold text-pink-500 text-lg leading-none">S</span>
+                <span className="font-bold text-blue-500 text-lg leading-none">O</span>
+                <span className="font-bold text-pink-500 text-lg leading-none">S</span>
                 <div className="text-[10px] text-gray-400 leading-none">Hệ thống cứu hộ xe</div>
               </div>
             </Link>
@@ -74,7 +76,7 @@ export default function Root() {
                   to={link.to}
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                     isActive(link.to)
-                      ? "bg-linear-to-r from-pink-100 to-blue-100 text-pink-700"
+                      ? "bg-linear-to-r from-pink-100 to-pink-100 text-pink-700"
                       : "text-gray-600 hover:bg-pink-50 hover:text-pink-600"
                   }`}
                 >
@@ -125,7 +127,7 @@ export default function Root() {
                                     ? "bg-red-400"
                                     : n.type === "warning"
                                     ? "bg-yellow-400"
-                                    : "bg-blue-400"
+                                    : "bg-pink-400"
                                 }`}
                               />
                               <div>
@@ -160,7 +162,7 @@ export default function Root() {
                           className="h-8 w-8 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="w-8 h-8 rounded-full bg-linear-to-br from-pink-400 to-blue-400 flex items-center justify-center text-white text-sm font-bold">
+                        <div className="w-8 h-8 rounded-full bg-linear-to-br from-pink-400 to-pink-400 flex items-center justify-center text-white text-sm font-bold">
                           {avatarInitial}
                         </div>
                       )}
@@ -205,7 +207,7 @@ export default function Root() {
                 onClick={() => setMenuOpen(false)}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                   isActive(link.to)
-                    ? "bg-linear-to-r from-pink-100 to-blue-100 text-pink-700"
+                    ? "bg-linear-to-r from-pink-100 to-pink-100 text-pink-700"
                     : "text-gray-600 hover:bg-pink-50"
                 }`}
               >
@@ -263,10 +265,12 @@ export default function Root() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 rounded-xl bg-linear-to-br from-pink-400 to-blue-400 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-linear-to-br from-pink-400 to-pink-400 flex items-center justify-center">
                   <Car size={16} className="text-white" />
                 </div>
-                <span className="font-bold text-gray-800">RescueGo</span>
+                <span className="font-bold text-pink-600">RescueS</span>
+                <span className="font-bold text-blue-500">O</span>
+                <span className="font-bold text-pink-600">S</span>
               </div>
               <p className="text-sm text-gray-500">
                 Nền tảng kết nối cứu hộ giao thông nhanh chóng, tin cậy và chuyên nghiệp.
@@ -294,13 +298,13 @@ export default function Root() {
               <h4 className="font-semibold text-gray-700 mb-3">Liên hệ</h4>
               <ul className="space-y-1.5 text-sm text-gray-500">
                 <li>📞 1800 6789 (Miễn phí)</li>
-                <li>✉️ support@rescuego.vn</li>
+                <li>✉️ support@rescuesos.vn</li>
                 <li>📍 TP. Hồ Chí Minh, Việt Nam</li>
               </ul>
             </div>
           </div>
           <div className="border-t border-pink-50 mt-8 pt-6 text-center text-xs text-gray-400">
-            © 2026 RescueGo. Hệ thống hỗ trợ sự cố xe trên đường.
+            © 2026 RescueSOS. Hệ thống hỗ trợ sự cố xe trên đường.
           </div>
         </div>
       </footer>

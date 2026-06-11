@@ -47,9 +47,9 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 const statusConfig = {
   pending: { label: "Chờ tiếp nhận", color: "text-yellow-600 bg-yellow-50 border-yellow-200" },
-  accepted: { label: "Đã tiếp nhận", color: "text-blue-600 bg-blue-50 border-blue-200" },
-  heading: { label: "Đang di chuyển", color: "text-indigo-600 bg-indigo-50 border-indigo-200" },
-  arrived: { label: "Đã đến nơi", color: "text-cyan-600 bg-cyan-50 border-cyan-200" },
+  accepted: { label: "Đã tiếp nhận", color: "text-pink-600 bg-pink-50 border-pink-200" },
+  heading: { label: "Đang di chuyển", color: "text-pink-600 bg-pink-50 border-pink-200" },
+  arrived: { label: "Đã đến nơi", color: "text-pink-600 bg-pink-50 border-pink-200" },
   processing: { label: "Đang xử lý", color: "text-purple-600 bg-purple-50 border-purple-200" },
   completed: { label: "Hoàn tất", color: "text-green-600 bg-green-50 border-green-200" },
   cancelled: { label: "Đã hủy", color: "text-gray-500 bg-gray-50 border-gray-200" },
@@ -694,7 +694,7 @@ export default function CompanyDashboard() {
           {companyProfile?.avatarUrl ? (
             <img src={companyProfile.avatarUrl} alt={companyName || "Công ty"} className="h-12 w-12 rounded-2xl object-cover shadow-md" />
           ) : (
-            <div className="w-12 h-12 rounded-2xl bg-linear-to-br from-blue-400 to-blue-300 flex items-center justify-center text-2xl shadow-md">
+            <div className="w-12 h-12 rounded-2xl bg-linear-to-br from-pink-400 to-pink-300 flex items-center justify-center text-2xl shadow-md">
               🚑
             </div>
           )}
@@ -714,7 +714,7 @@ export default function CompanyDashboard() {
                 {(companyStats.averageRating ?? 0).toFixed(1)} · {companyStats.reviewCount} đánh giá
               </span>
               {companyProfile?.verified && (
-                <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-200 flex items-center gap-1">
+                <span className="text-xs bg-pink-50 text-pink-600 px-2 py-0.5 rounded-full border border-pink-200 flex items-center gap-1">
                   ✓ Đã xác minh
                 </span>
               )}
@@ -760,8 +760,8 @@ export default function CompanyDashboard() {
             label: "Doanh thu tháng",
             value: formatRevenue(companyStats.monthlyRevenue),
             change: "",
-            color: "from-blue-100 to-blue-50",
-            text: "text-blue-600",
+            color: "from-pink-100 to-pink-50",
+            text: "text-pink-600",
             icon: <TrendingUp size={18} />,
           },
         ].map((card, i) => (
@@ -790,7 +790,7 @@ export default function CompanyDashboard() {
             onClick={() => setActiveTab(t.key)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
               activeTab === t.key
-                ? "bg-white text-blue-600 shadow-sm"
+                ? "bg-white text-pink-600 shadow-sm"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
@@ -814,7 +814,7 @@ export default function CompanyDashboard() {
 
             <div className="h-64 overflow-auto mb-3 p-2 border rounded-lg bg-gray-50" id="company-messages-scroll">
               {messages.map((m) => (
-                <div key={m.message_id} className={`mb-2 p-2 rounded-lg ${m.message_sender === 'company' ? 'bg-blue-50 self-end text-right' : 'bg-white'}`}>
+                <div key={m.message_id} className={`mb-2 p-2 rounded-lg ${m.message_sender === 'company' ? 'bg-pink-50 self-end text-right' : 'bg-white'}`}>
                   <div className="text-xs text-gray-500 mb-1">{m.message_sender}</div>
                   <div className="text-sm text-gray-800">{m.message_content}</div>
                   <div className="text-xs text-gray-400 mt-1">{new Date(m.sent_at).toLocaleTimeString()}</div>
@@ -841,7 +841,7 @@ export default function CompanyDashboard() {
                   }
                 }}
                 disabled={sendingMessage}
-                className="px-4 py-2 bg-blue-600 text-white rounded-xl disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 bg-pink-600 text-white rounded-xl disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {sendingMessage ? <Loader2 size={14} className="animate-spin" /> : "Gửi"}
               </button>

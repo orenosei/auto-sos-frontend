@@ -36,7 +36,7 @@ export default function CompaniesTab() {
                       {company.avatarUrl ? (
                         <img src={company.avatarUrl} alt={company.name} className="h-12 w-12 rounded-2xl object-cover" />
                       ) : (
-                        <div className="w-12 h-12 rounded-2xl bg-linear-to-br from-blue-100 to-pink-100 flex items-center justify-center text-2xl">
+                        <div className="w-12 h-12 rounded-2xl bg-linear-to-br from-pink-100 to-pink-100 flex items-center justify-center text-2xl">
                           🚑
                         </div>
                       )}
@@ -74,7 +74,7 @@ export default function CompaniesTab() {
                                 href={url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-100"
+                                className="rounded-full border border-pink-100 bg-pink-50 px-2 py-0.5 text-xs text-pink-600 hover:bg-pink-100"
                               >
                                 Tài liệu {index + 1}
                               </a>
@@ -110,7 +110,7 @@ export default function CompaniesTab() {
                           Bỏ xác minh
                         </button>
                       )}
-                      <button className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-xl text-xs font-medium hover:bg-blue-100 transition-colors">
+                      <button className="flex items-center gap-1 px-3 py-1.5 bg-pink-50 text-pink-600 border border-pink-200 rounded-xl text-xs font-medium hover:bg-pink-100 transition-colors">
                         <Eye size={13} />
                         Xem
                       </button>

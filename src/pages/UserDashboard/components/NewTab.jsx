@@ -69,7 +69,7 @@ export default function NewTab() {
                             {Number.isFinite(c.distanceKm) ? `${c.distanceKm.toFixed(1)} km` : "Chưa có dữ liệu"}
                           </span>
                           <span className="flex items-center gap-1">
-                            <Clock size={11} className="text-blue-400" />
+                            <Clock size={11} className="text-pink-400" />
                             {Number.isFinite(c.etaMinutes)
                               ? `~${c.etaMinutes} phút`
                               : Number.isFinite(Number(c.responseTime))
@@ -155,7 +155,7 @@ export default function NewTab() {
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Đơn vị đã chọn
                   </label>
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-sm text-blue-700 font-medium">
+                  <div className="bg-pink-50 border border-pink-200 rounded-xl px-4 py-2.5 text-sm text-pink-700 font-medium">
                     {companies.find((c) => c.id === newReq.selectedCompanyId)?.name || "Chưa chọn đơn vị"}
                   </div>
                 </div>

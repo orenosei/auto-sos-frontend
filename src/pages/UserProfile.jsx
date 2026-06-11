@@ -67,7 +67,7 @@ export default function UserProfile() {
     setUploading(true);
     setError("");
     try {
-      const uploaded = await uploadFileToCloudinary(file, "auto-sos/avatars");
+      const uploaded = await uploadFileToCloudinary(file, "rescuesos/avatars");
       setForm((prev) => ({ ...prev, avatar_url: uploaded.secureUrl }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không thể tải avatar");

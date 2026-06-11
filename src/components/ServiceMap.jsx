@@ -65,7 +65,7 @@ const createIcon = (color, innerSvg) => {
 };
 
 const userIcon = createIcon("#ef4444", userSvg);
-const companyIcon = createIcon("#3b82f6", rescueSvg);
+const companyIcon = createIcon("#ec4899", rescueSvg);
 
 /**
  * Map component hiển thị vị trí người dùng và các công ty gần nhất
@@ -159,8 +159,8 @@ export default function ServiceMap({ userLocation, companies = [], onCompanyClic
               center={[userLocation.latitude, userLocation.longitude]}
               radius={SEARCH_RADIUS_M}
               pathOptions={{
-                color: "#3b82f6",
-                fillColor: "#60a5fa",
+                color: "#ec4899",
+                fillColor: "#f472b6",
                 fillOpacity: 0.08,
                 weight: 1.5,
                 dashArray: "8 8",
@@ -261,14 +261,14 @@ export default function ServiceMap({ userLocation, companies = [], onCompanyClic
           <div className="flex items-center gap-2">
             <div
               className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: "#3b82f6" }}
+              style={{ backgroundColor: "#ec4899" }}
             />
             <span className="text-gray-700">Công ty cứu hộ</span>
           </div>
           <div className="flex items-center gap-2">
             <div
               className="w-4 h-2 rounded-full"
-              style={{ backgroundColor: "#60a5fa", opacity: 0.35 }}
+              style={{ backgroundColor: "#f472b6", opacity: 0.35 }}
             />
             <span className="text-gray-700">Bán kính quây 10km</span>
           </div>

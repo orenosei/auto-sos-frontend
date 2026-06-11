@@ -32,7 +32,7 @@ import { useApp } from "../context/useApp";
 const categories = ["Tất cả", "Kinh nghiệm", "Kiến thức", "Cần tư vấn", "Đánh giá dịch vụ"];
 
 const categoryColors = {
-  "Kinh nghiệm": "bg-blue-100 text-blue-700",
+  "Kinh nghiệm": "bg-pink-100 text-pink-700",
   "Kiến thức": "bg-purple-100 text-purple-700",
   "Cần tư vấn": "bg-orange-100 text-orange-700",
   "Đánh giá dịch vụ": "bg-green-100 text-green-700",
@@ -70,7 +70,7 @@ function Avatar({ src, name, size = "md" }) {
 
   return (
     <div
-      className={`${sizeClass} rounded-full bg-linear-to-br from-pink-300 to-blue-300 flex items-center justify-center text-white font-bold shrink-0`}
+      className={`${sizeClass} rounded-full bg-linear-to-br from-pink-300 to-pink-300 flex items-center justify-center text-white font-bold shrink-0`}
     >
       {initial}
     </div>
@@ -187,7 +187,7 @@ export default function Community() {
     try {
       const uploaded = [];
       for (const file of newPost.images) {
-        const result = await uploadFileToCloudinary(file, "auto-sos/community");
+        const result = await uploadFileToCloudinary(file, "rescuesos/community");
         uploaded.push(result.secureUrl);
       }
 
@@ -384,7 +384,7 @@ export default function Community() {
                     </button>
                     <button
                       onClick={() => openPost(post)}
-                      className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-blue-600 transition-colors"
+                      className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-pink-600 transition-colors"
                     >
                       <MessageCircle size={16} />
                       {post.comments}
@@ -404,8 +404,8 @@ export default function Community() {
         </div>
 
         <aside className="space-y-5">
-          <div className="bg-linear-to-br from-pink-50 to-blue-50 rounded-2xl border border-pink-100 p-5">
-            <h3 className="font-bold text-gray-800 mb-3">Cộng đồng RescueGo</h3>
+          <div className="bg-linear-to-br from-pink-50 to-pink-50 rounded-2xl border border-pink-100 p-5">
+            <h3 className="font-bold text-gray-800 mb-3">Cộng đồng RescueSOS</h3>
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-xl p-3 text-center shadow-sm">
                 <Users size={18} className="text-pink-500 mx-auto mb-1" />
@@ -413,7 +413,7 @@ export default function Community() {
                 <p className="text-xs text-gray-400">Bài viết</p>
               </div>
               <div className="bg-white rounded-xl p-3 text-center shadow-sm">
-                <MessageCircle size={18} className="text-blue-500 mx-auto mb-1" />
+                <MessageCircle size={18} className="text-pink-500 mx-auto mb-1" />
                 <p className="font-bold text-gray-800">{stats.comments}</p>
                 <p className="text-xs text-gray-400">Bình luận</p>
               </div>

@@ -91,7 +91,7 @@ export default function TrackTab() {
                     <span className="text-gray-600">{selectedRequest.location}</span>
                   </div>
                   <div className="flex gap-2">
-                    <Wrench size={14} className="text-blue-400 mt-0.5 shrink-0" />
+                    <Wrench size={14} className="text-pink-400 mt-0.5 shrink-0" />
                     <span className="text-gray-600">{selectedRequest.serviceType}</span>
                   </div>
                   {selectedRequest.price && (
@@ -140,11 +140,11 @@ export default function TrackTab() {
                 {/* Actions */}
                 {selectedRequest.status !== "completed" && selectedRequest.status !== "cancelled" && (
                   <div className="flex gap-3 mt-4">
-                    <button onClick={() => openMessageModal(selectedRequest)} className="flex-1 flex items-center justify-center gap-2 bg-blue-50 text-blue-600 py-2.5 rounded-xl text-sm font-medium hover:bg-blue-100 transition-colors">
+                    <button onClick={() => openMessageModal(selectedRequest)} className="flex-1 flex items-center justify-center gap-2 bg-pink-50 text-pink-600 py-2.5 rounded-xl text-sm font-medium hover:bg-pink-100 transition-colors">
                       <MessageCircle size={16} />
                       Nhắn tin
                     </button>
-                    <button className="flex-1 flex items-center justify-center gap-2 bg-blue-50 text-blue-600 py-2.5 rounded-xl text-sm font-medium hover:bg-blue-100 transition-colors">
+                    <button className="flex-1 flex items-center justify-center gap-2 bg-pink-50 text-pink-600 py-2.5 rounded-xl text-sm font-medium hover:bg-pink-100 transition-colors">
                       <Phone size={16} />
                       Gọi điện
                     </button>

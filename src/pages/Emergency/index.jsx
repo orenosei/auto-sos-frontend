@@ -50,8 +50,8 @@ const ISSUE_TYPES = [
     id: "battery",
     label: "Hết bình ắc quy",
     emoji: "🔋",
-    color: "text-blue-600",
-    bg: "bg-blue-50 border-blue-200 hover:border-blue-400",
+    color: "text-pink-600",
+    bg: "bg-pink-50 border-pink-200 hover:border-pink-400",
     urgency: "medium",
   },
 ];
@@ -59,7 +59,7 @@ const ISSUE_TYPES = [
 const URGENCY_LABELS = {
   critical: { label: "Khẩn cấp", color: "text-red-600 bg-red-100" },
   high: { label: "Ưu tiên cao", color: "text-orange-600 bg-orange-100" },
-  medium: { label: "Bình thường", color: "text-blue-600 bg-blue-100" },
+  medium: { label: "Bình thường", color: "text-pink-600 bg-pink-100" },
 };
 
 function parseGeoJsonPoint(geoJson) {
@@ -118,7 +118,7 @@ function LocatingStep() {
           GPS
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" style={{ animationDelay: "200ms" }} />
+          <span className="w-2 h-2 rounded-full bg-pink-400 animate-pulse" style={{ animationDelay: "200ms" }} />
           Mạng
         </span>
         <span className="flex items-center gap-1">
@@ -641,7 +641,7 @@ export function EmergencySOS() {
                         className="w-full text-left bg-white border-2 border-gray-100 hover:border-pink-300 hover:shadow-md rounded-2xl p-4 transition-all active:scale-[0.98] group disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         <div className="flex items-start gap-3">
-                          <div className="w-11 h-11 rounded-xl bg-linear-to-br from-pink-100 to-blue-100 flex items-center justify-center text-xl shrink-0 relative">
+                          <div className="w-11 h-11 rounded-xl bg-linear-to-br from-pink-100 to-pink-100 flex items-center justify-center text-xl shrink-0 relative">
                             🚑
                             {idx === 0 && (
                               <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
@@ -655,7 +655,7 @@ export function EmergencySOS() {
                                 {company.name}
                               </span>
                               {company.verified && (
-                                <Shield size={12} className="text-blue-400 shrink-0" />
+                                <Shield size={12} className="text-pink-400 shrink-0" />
                               )}
                             </div>
                             <div className="flex items-center gap-3 text-xs text-gray-500">
@@ -727,7 +727,7 @@ export function EmergencySOS() {
                   </div>
 
                   {/* ETA Countdown */}
-                  <div className="bg-linear-to-br from-pink-50 to-blue-50 border border-pink-100 rounded-2xl p-4 mb-4">
+                  <div className="bg-linear-to-br from-pink-50 to-pink-50 border border-pink-100 rounded-2xl p-4 mb-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs text-gray-500 flex items-center gap-1">
                         <Clock size={12} className="text-pink-400" />
@@ -744,7 +744,7 @@ export function EmergencySOS() {
                     {/* Progress bar */}
                     <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                       <div
-                        className="h-full bg-linear-to-r from-pink-500 to-blue-400 rounded-full transition-all duration-1000"
+                        className="h-full bg-linear-to-r from-pink-500 to-pink-400 rounded-full transition-all duration-1000"
                         style={{ width: `${progress}%` }}
                       />
                     </div>
@@ -758,7 +758,7 @@ export function EmergencySOS() {
                   {/* Company info */}
                   <div className="bg-white border border-gray-100 rounded-2xl p-4 mb-4 shadow-sm">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-linear-to-br from-pink-100 to-blue-100 flex items-center justify-center text-2xl">
+                      <div className="w-12 h-12 rounded-xl bg-linear-to-br from-pink-100 to-pink-100 flex items-center justify-center text-2xl">
                         🚑
                       </div>
                       <div className="flex-1">
@@ -795,10 +795,10 @@ export function EmergencySOS() {
                   </div>
 
                   {/* Location */}
-                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 mb-5">
-                    <MapPin size={14} className="text-blue-500 mt-0.5 shrink-0" />
+                  <div className="flex items-start gap-2 bg-pink-50 border border-pink-100 rounded-xl px-3 py-2.5 mb-5">
+                    <MapPin size={14} className="text-pink-500 mt-0.5 shrink-0" />
                     <div>
-                      <p className="text-xs text-blue-500 font-medium">Vị trí của bạn</p>
+                      <p className="text-xs text-pink-500 font-medium">Vị trí của bạn</p>
                       <p className="text-xs text-gray-600 mt-0.5">{location}</p>
                     </div>
                   </div>

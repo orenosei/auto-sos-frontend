@@ -91,7 +91,7 @@ export default function ContentTab() {
               <div key={item.report_id} className="bg-white rounded-2xl border border-pink-100 p-5">
                 <div className="flex items-start justify-between flex-wrap gap-3">
                   <div className="flex items-start gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-linear-to-br from-pink-300 to-blue-300 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-linear-to-br from-pink-300 to-pink-300 flex items-center justify-center text-white text-xs font-bold shrink-0">
                       {(item.reporter_full_name || item.reporter_user_name || "U")[0]}
                     </div>
                     <div className="min-w-0">
@@ -99,7 +99,7 @@ export default function ContentTab() {
                         <span className="font-medium text-gray-800 text-sm">
                           {item.reporter_full_name || item.reporter_user_name || "Người dùng"}
                         </span>
-                        <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
+                        <span className="text-xs bg-pink-50 text-pink-600 px-2 py-0.5 rounded-full">
                           {item.target_type === "post" ? "Bài đăng" : "Bình luận"}
                         </span>
                         <span

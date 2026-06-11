@@ -15,7 +15,7 @@ export default function ServicesTab() {
             <button
               type="button"
               onClick={() => setAddingServiceOpen((v) => !v)}
-              className="flex items-center gap-1.5 bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-600 transition-colors"
+              className="flex items-center gap-1.5 bg-pink-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-pink-600 transition-colors"
             >
               <Plus size={16} />
               Thêm dịch vụ
@@ -31,7 +31,7 @@ export default function ServicesTab() {
                   <select
                     value={newServiceId}
                     onChange={(e) => setNewServiceId(e.target.value)}
-                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
+                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition-all bg-white"
                   >
                     <option value="">-- Chọn dịch vụ --</option>
                     {availableServices.map((s) => (
@@ -55,7 +55,7 @@ export default function ServicesTab() {
                     step="1000"
                     value={newServicePrice}
                     onChange={(e) => setNewServicePrice(e.target.value)}
-                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition-all"
                     placeholder="Ví dụ: 200000"
                   />
                 </div>
@@ -66,7 +66,7 @@ export default function ServicesTab() {
                   type="button"
                   disabled={addingService || availableServices.length === 0}
                   onClick={handleAddService}
-                  className="bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="bg-pink-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-pink-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {addingService ? "Đang thêm..." : "Thêm"}
                 </button>
@@ -98,7 +98,7 @@ export default function ServicesTab() {
                           type="button"
                           disabled={savingService}
                           onClick={handleSaveServicePrice}
-                          className="px-2 py-1 rounded-lg hover:bg-blue-50 text-blue-600 text-xs font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                          className="px-2 py-1 rounded-lg hover:bg-pink-50 text-pink-600 text-xs font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           {savingService ? "Đang lưu..." : "Lưu"}
                         </button>
@@ -116,7 +116,7 @@ export default function ServicesTab() {
                         <button
                           type="button"
                           onClick={() => startEditService(s)}
-                          className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 transition-colors"
+                          className="p-1.5 rounded-lg hover:bg-pink-50 text-pink-500 transition-colors"
                         >
                           <Edit size={14} />
                         </button>
@@ -142,7 +142,7 @@ export default function ServicesTab() {
                         step="1000"
                         value={editingServicePrice}
                         onChange={(e) => setEditingServicePrice(e.target.value)}
-                        className="w-32 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                        className="w-32 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition-all"
                       />
                       <span className="text-gray-400">VND</span>
                     </div>
