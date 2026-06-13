@@ -404,21 +404,7 @@ export default function Community() {
         </div>
 
         <aside className="space-y-5">
-          <div className="bg-linear-to-br from-pink-50 to-pink-50 rounded-2xl border border-pink-100 p-5">
-            <h3 className="font-bold text-gray-800 mb-3">Cộng đồng RescueSOS</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white rounded-xl p-3 text-center shadow-sm">
-                <Users size={18} className="text-pink-500 mx-auto mb-1" />
-                <p className="font-bold text-gray-800">{stats.posts}</p>
-                <p className="text-xs text-gray-400">Bài viết</p>
-              </div>
-              <div className="bg-white rounded-xl p-3 text-center shadow-sm">
-                <MessageCircle size={18} className="text-pink-500 mx-auto mb-1" />
-                <p className="font-bold text-gray-800">{stats.comments}</p>
-                <p className="text-xs text-gray-400">Bình luận</p>
-              </div>
-            </div>
-          </div>
+
 
           <div className="bg-white rounded-2xl border border-pink-100 p-5">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
