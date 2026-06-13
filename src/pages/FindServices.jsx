@@ -9,6 +9,8 @@ import {
   Shield,
   Filter,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   Loader,
   AlertCircle,
@@ -26,6 +28,9 @@ export default function FindServices() {
   const [sortBy, setSortBy] = useState("distance");
   const [showFilter, setShowFilter] = useState(false);
   const [useGPSLocation, setUseGPSLocation] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const itemsPerPage = 8;
 
   const [services, setServices] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -197,6 +202,38 @@ export default function FindServices() {
     return result;
   }, [companies, searchText, selectedService, sortBy, getCompanyDistanceKm]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchText, selectedService, sortBy]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
+
+  const paginatedCompanies = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filtered.slice(startIndex, startIndex + itemsPerPage);
+  }, [filtered, currentPage]);
+
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const windowSize = 5;
+    const halfWindow = Math.floor(windowSize / 2);
+    let startPage = Math.max(1, currentPage - halfWindow);
+    let endPage = Math.min(totalPages, startPage + windowSize - 1);
+
+    if (endPage - startPage + 1 < windowSize) {
+      startPage = Math.max(1, endPage - windowSize + 1);
+    }
+
+    return Array.from({ length: endPage - startPage + 1 }, (_, index) => startPage + index);
+  }, [currentPage, totalPages]);
+
   const mapCompanies = useMemo(() => {
     if (!(useGPSLocation && location)) return [];
 
@@ -343,107 +380,158 @@ export default function FindServices() {
               <p className="text-gray-300 text-sm mt-1">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</p>
             </div>
           ) : (
-            filtered.map((company) => (
-              <div
-                id={`company-${company.company_id || company.id}`}
-                key={company.id}
-                className="bg-white rounded-2xl border border-pink-100 p-5 hover:border-pink-300 hover:shadow-lg hover:shadow-pink-50 transition-all"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-pink-100 to-pink-100 flex items-center justify-center text-3xl shrink-0">
-                    🚑
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between flex-wrap gap-2">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-bold text-gray-900">{company.name}</h3>
-                          {company.verified && (
-                            <span className="flex items-center gap-1 text-[10px] font-medium text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full">
-                              <Shield size={10} />
-                              Đã xác minh
-                            </span>
+            <>
+              {paginatedCompanies.map((company) => (
+                <div
+                  id={`company-${company.company_id || company.id}`}
+                  key={company.id}
+                  className="bg-white rounded-2xl border border-pink-100 p-5 hover:border-pink-300 hover:shadow-lg hover:shadow-pink-50 transition-all"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-pink-100 to-pink-100 flex items-center justify-center text-3xl shrink-0">
+                      🚑
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between flex-wrap gap-2">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-bold text-gray-900">{company.name}</h3>
+                            {company.verified && (
+                              <span className="flex items-center gap-1 text-[10px] font-medium text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full">
+                                <Shield size={10} />
+                                Đã xác minh
+                              </span>
+                            )}
+                          </div>
+                          {Number.isFinite(company.rating) ? (
+                            <div className="flex items-center gap-1 mt-1">
+                              <Star size={14} className="fill-yellow-400 text-yellow-400" />
+                              <span className="text-sm font-semibold text-gray-700">{Number(company.rating).toFixed(1)}</span>
+                              {Number.isFinite(company.totalReviews) && Number(company.totalReviews) > 0 ? (
+                                <span className="text-xs text-gray-400">({Number(company.totalReviews)} đánh giá)</span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-gray-400 mt-1">Chưa có đánh giá</p>
                           )}
                         </div>
-                        {Number.isFinite(company.rating) ? (
-                          <div className="flex items-center gap-1 mt-1">
-                            <Star size={14} className="fill-yellow-400 text-yellow-400" />
-                            <span className="text-sm font-semibold text-gray-700">{Number(company.rating).toFixed(1)}</span>
-                            {Number.isFinite(company.totalReviews) && Number(company.totalReviews) > 0 ? (
-                              <span className="text-xs text-gray-400">({Number(company.totalReviews)} đánh giá)</span>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-gray-400 mt-1">Chưa có đánh giá</p>
+                        <div className="text-right">
+                          <span className="inline-flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                            <MapPin size={12} />
+                            {Number.isFinite(getCompanyDistanceKm(company))
+                              ? `${(getCompanyDistanceKm(company) ?? 0).toFixed(1)} km`
+                              : "Chưa có dữ liệu"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3 mt-3 text-xs text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <MapPin size={12} className="text-pink-400" />
+                          {company.address || "Chưa cập nhật địa chỉ"}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock size={12} className="text-pink-400" />
+                          {(() => {
+                            const distance = getCompanyDistanceKm(company);
+                            const eta = Number.isFinite(distance) ? calculateETA(distance) : null;
+                            return eta !== null ? `~${eta} phút` : "Chưa có ETA";
+                          })()}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Phone size={12} className="text-green-400" />
+                          {company.phone || "Chưa cập nhật"}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5 mt-3">
+                        {company.services.slice(0, 4).map((s) => (
+                          <span
+                            key={s}
+                            className="text-xs bg-pink-50 text-pink-600 px-2 py-0.5 rounded-full border border-pink-100"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                        {company.services.length > 4 && (
+                          <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                            +{company.services.length - 4}
+                          </span>
                         )}
                       </div>
-                      <div className="text-right">
-                        <span className="inline-flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full">
-                          <MapPin size={12} />
-                          {Number.isFinite(getCompanyDistanceKm(company))
-                            ? `${(getCompanyDistanceKm(company) ?? 0).toFixed(1)} km`
-                            : "Chưa có dữ liệu"}
-                        </span>
-                      </div>
-                    </div>
 
-                    <div className="flex flex-wrap gap-3 mt-3 text-xs text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <MapPin size={12} className="text-pink-400" />
-                        {company.address || "Chưa cập nhật địa chỉ"}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock size={12} className="text-pink-400" />
-                        {(() => {
-                          const distance = getCompanyDistanceKm(company);
-                          const eta = Number.isFinite(distance) ? calculateETA(distance) : null;
-                          return eta !== null ? `~${eta} phút` : "Chưa có ETA";
-                        })()}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Phone size={12} className="text-green-400" />
-                        {company.phone || "Chưa cập nhật"}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5 mt-3">
-                      {company.services.slice(0, 4).map((s) => (
-                        <span
-                          key={s}
-                          className="text-xs bg-pink-50 text-pink-600 px-2 py-0.5 rounded-full border border-pink-100"
+                      <div className="flex gap-3 mt-4">
+                        <Link
+                          to="/dashboard"
+                          state={{
+                            preselectedCompanyId: company.id,
+                            preselectedLat: location?.latitude,
+                            preselectedLng: location?.longitude,
+                            preselectedAddress: displayAddress,
+                          }}
+                          className="flex-1 text-center bg-linear-to-r from-pink-500 to-pink-400 text-white text-sm font-medium py-2 rounded-xl hover:shadow-md hover:shadow-pink-200 transition-all"
                         >
-                          {s}
-                        </span>
-                      ))}
-                      {company.services.length > 4 && (
-                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-                          +{company.services.length - 4}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex gap-3 mt-4">
-                      <Link
-                        to="/dashboard"
-                        state={{
-                          preselectedCompanyId: company.id,
-                          preselectedLat: location?.latitude,
-                          preselectedLng: location?.longitude,
-                          preselectedAddress: displayAddress,
-                        }}
-                        className="flex-1 text-center bg-linear-to-r from-pink-500 to-pink-400 text-white text-sm font-medium py-2 rounded-xl hover:shadow-md hover:shadow-pink-200 transition-all"
-                      >
-                        Gửi yêu cầu
-                      </Link>
-                      <button className="flex items-center gap-1 px-4 py-2 border border-pink-200 text-pink-600 text-sm rounded-xl hover:bg-pink-50 transition-colors">
-                        <Phone size={14} />
-                        Gọi ngay
-                      </button>
+                          Gửi yêu cầu
+                        </Link>
+                        <button className="flex items-center gap-1 px-4 py-2 border border-pink-200 text-pink-600 text-sm rounded-xl hover:bg-pink-50 transition-colors">
+                          <Phone size={14} />
+                          Gọi ngay
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))
+              ))}
+
+              {totalPages > 1 && (
+                <div className="bg-white rounded-2xl border border-pink-100 p-4 sm:p-5 flex flex-col gap-3">
+                  <p className="text-sm text-gray-500">
+                    Hiển thị <span className="font-semibold text-gray-800">{(currentPage - 1) * itemsPerPage + 1}</span>
+                    {" "}đến{" "}
+                    <span className="font-semibold text-gray-800">
+                      {Math.min(currentPage * itemsPerPage, filtered.length)}
+                    </span>
+                    {" "}trong <span className="font-semibold text-gray-800">{filtered.length}</span> kết quả
+                  </p>
+
+                  <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1">
+                    <button
+                      onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                      disabled={currentPage === 1}
+                      className="inline-flex shrink-0 items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft size={16} />
+                      Trước
+                    </button>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {pageNumbers.map((page) => (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`min-w-10 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                            page === currentPage
+                              ? "bg-pink-500 text-white shadow-sm"
+                              : "border border-gray-200 text-gray-700 hover:bg-pink-50 hover:text-pink-600"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                      disabled={currentPage === totalPages}
+                      className="inline-flex shrink-0 items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Sau
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
