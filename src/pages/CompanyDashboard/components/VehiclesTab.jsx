@@ -143,7 +143,7 @@ export default function VehiclesTab() {
                   </span>
                   {vehicle.equipment_description && (
                     <p className="mt-3 text-xs text-gray-500 leading-relaxed">
-                      {vehicle.equipment_description}
+                      Mô tả: {vehicle.equipment_description}
                     </p>
                   )}
                 </div>

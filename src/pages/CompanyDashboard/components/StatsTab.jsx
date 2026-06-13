@@ -56,7 +56,7 @@ export default function StatsTab() {
               <p className="text-3xl font-bold text-gray-900">
                 {companyStats.avgResponseMinutes != null ? `${companyStats.avgResponseMinutes} phút` : "--"}
               </p>
-              <p className="text-xs text-gray-500 mt-1">Trung bình thời gian đến nơi</p>
+              
             </div>
             <div className="bg-white rounded-2xl border border-pink-100 p-5">
               <div className="flex items-center gap-2 mb-2">

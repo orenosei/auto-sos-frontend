@@ -254,7 +254,7 @@ export default function Home() {
                 {serviceIconMap[service.name] || <Wrench size={24} />}
               </div>
               <p className="text-sm font-medium text-gray-700 leading-tight">{service.name}</p>
-              <p className="text-xs text-gray-400 mt-1">{service.price}</p>
+
             </Link>
           ))}
         </div>
@@ -389,28 +389,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CTA Banner */}
-      <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-linear-to-r from-pink-500 via-pink-400 to-pink-400 rounded-3xl p-8 md:p-12 text-center text-white shadow-2xl shadow-pink-200 relative overflow-hidden">
-          <div className="absolute -top-10 -left-10 w-40 h-40 bg-white/10 rounded-full" />
-          <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/10 rounded-full" />
-          <div className="relative">
-            <h2 className="text-2xl md:text-3xl font-bold mb-3">
-              Bạn là công ty cứu hộ?
-            </h2>
-            <p className="text-pink-100 mb-6 max-w-xl mx-auto">
-              Tham gia mạng lưới RescueSOS để tiếp cận hàng ngàn khách hàng cần hỗ trợ mỗi ngày.
-            </p>
-            <Link
-              to="/company"
-              className="inline-flex items-center gap-2 bg-white text-pink-600 font-semibold px-8 py-3.5 rounded-2xl hover:bg-pink-50 transition-colors shadow-lg"
-            >
-              Đăng ký đối tác ngay
-              <ArrowRight size={18} />
-            </Link>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

@@ -299,7 +299,7 @@ export default function Root() {
               <ul className="space-y-1.5 text-sm text-gray-500">
                 <li>📞 1800 6789 (Miễn phí)</li>
                 <li>✉️ support@rescuesos.vn</li>
-                <li>📍 TP. Hồ Chí Minh, Việt Nam</li>
+                <li>📍 Hà Nội, Việt Nam</li>
               </ul>
             </div>
           </div>
