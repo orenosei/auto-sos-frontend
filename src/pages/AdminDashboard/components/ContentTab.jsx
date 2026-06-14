@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, CheckCircle2, Loader2, Search, XCircle } from "lucide-react";
 import {
   getCommunityReports,
   updateCommunityCommentStatus,
@@ -21,6 +21,26 @@ export default function ContentTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState(null);
+  const [searchText, setSearchText] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [targetFilter, setTargetFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const pageSize = 6;
+
+  const filteredReports = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+    return reports.filter((item) => {
+      const content = `${getReportTitle(item)} ${getReportContent(item) || ""} ${item.reason || ""} ${item.reporter_full_name || ""} ${item.reporter_user_name || ""}`.toLowerCase();
+      const matchesSearch = !keyword || content.includes(keyword);
+      const matchesStatus = statusFilter === "all" || item.status === statusFilter;
+      const matchesTarget = targetFilter === "all" || item.target_type === targetFilter;
+      return matchesSearch && matchesStatus && matchesTarget;
+    });
+  }, [reports, searchText, statusFilter, targetFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredReports.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageReports = filteredReports.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const loadReports = useCallback(async () => {
     setLoading(true);
@@ -68,6 +88,47 @@ export default function ContentTab() {
         <p className="text-sm text-gray-500">Xem các báo cáo bài viết và bình luận vi phạm từ cộng đồng</p>
       </div>
 
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 max-w-xs">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Tìm báo cáo..."
+            value={searchText}
+            onChange={(e) => {
+              setSearchText(e.target.value);
+              setPage(1);
+            }}
+            className="w-full rounded-xl border border-gray-200 py-2.5 pl-9 pr-4 text-sm focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-100"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setPage(1);
+          }}
+          className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-100"
+        >
+          <option value="all">Tất cả trạng thái</option>
+          <option value="pending">Đang chờ</option>
+          <option value="reviewed">Đã xử lý</option>
+          <option value="dismissed">Đã bỏ qua</option>
+        </select>
+        <select
+          value={targetFilter}
+          onChange={(e) => {
+            setTargetFilter(e.target.value);
+            setPage(1);
+          }}
+          className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-100"
+        >
+          <option value="all">Tất cả nội dung</option>
+          <option value="post">Bài đăng</option>
+          <option value="comment">Bình luận</option>
+        </select>
+      </div>
+
       {error && (
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
@@ -79,13 +140,14 @@ export default function ContentTab() {
         <div className="flex items-center justify-center py-16 bg-white rounded-2xl border border-pink-100">
           <Loader2 size={28} className="animate-spin text-pink-500" />
         </div>
-      ) : reports.length === 0 ? (
+      ) : filteredReports.length === 0 ? (
         <div className="bg-white rounded-2xl border border-pink-100 p-8 text-center text-sm text-gray-400">
           Chưa có báo cáo nội dung nào
         </div>
       ) : (
+        <>
         <div className="space-y-4">
-          {reports.map((item) => {
+          {pageReports.map((item) => {
             const busy = updatingId === item.report_id;
             return (
               <div key={item.report_id} className="bg-white rounded-2xl border border-pink-100 p-5">
@@ -146,6 +208,28 @@ export default function ContentTab() {
             );
           })}
         </div>
+        <div className="mt-4 flex items-center justify-between gap-3 text-sm text-gray-500">
+          <span>
+            Trang {safePage}/{totalPages} · {filteredReports.length} kết quả
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={safePage === 1}
+              className="rounded-xl border border-gray-200 px-3 py-2 font-medium text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Trước
+            </button>
+            <button
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={safePage === totalPages}
+              className="rounded-xl border border-gray-200 px-3 py-2 font-medium text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Sau
+            </button>
+          </div>
+        </div>
+        </>
       )}
     </div>
   );

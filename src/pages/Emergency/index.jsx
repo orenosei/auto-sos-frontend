@@ -62,6 +62,42 @@ const URGENCY_LABELS = {
   medium: { label: "Bình thường", color: "text-pink-600 bg-pink-100" },
 };
 
+const INCOMPLETE_CONTACT_MESSAGE = "Chưa điền thông tin. Vui lòng nhập tên và số điện thoại.";
+const ACTIVE_SOS_STORAGE_KEY = "rescuesos.activeSosRequest";
+
+function readActiveSosRequest() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(ACTIVE_SOS_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed?.requestId || !parsed?.selectedCompany) return null;
+    return parsed;
+  } catch (err) {
+    console.warn(err);
+    return null;
+  }
+}
+
+function saveActiveSosRequest(payload) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ACTIVE_SOS_STORAGE_KEY, JSON.stringify(payload));
+  } catch (err) {
+    console.warn(err);
+  }
+}
+
+function clearActiveSosRequest() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(ACTIVE_SOS_STORAGE_KEY);
+  } catch (err) {
+    console.warn(err);
+  }
+}
+
 function parseGeoJsonPoint(geoJson) {
   if (!geoJson) return null;
   try {
@@ -153,8 +189,43 @@ export function EmergencySOS() {
   const timerRef = useRef(null);
 
   const { getCurrentLocation, error: gpsHookError } = useGPS();
+  const sosOwner = currentUser?.role && currentUser?.id ? `${currentUser.role}:${currentUser.id}` : "guest";
+
+  const restoreActiveSOS = useCallback((activeRequest) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    const etaExpiresAt = Number(activeRequest.etaExpiresAt);
+    const remainingEta = Number.isFinite(etaExpiresAt)
+      ? Math.max(0, Math.ceil((etaExpiresAt - Date.now()) / 1000))
+      : Number(activeRequest.etaSeconds ?? 0);
+    const initialEta = Number(activeRequest.initialEtaSeconds);
+
+    setIsOpen(true);
+    setStep("tracking");
+    setLocation(activeRequest.location ?? "");
+    setGpsCoords(activeRequest.gpsCoords ?? null);
+    setSelectedIssue(activeRequest.selectedIssue ?? null);
+    setSelectedCompany(activeRequest.selectedCompany);
+    setContactInfo({
+      name: activeRequest.contactInfo?.name ?? "",
+      phone: activeRequest.contactInfo?.phone ?? "",
+      contactBackNow: activeRequest.contactInfo?.contactBackNow ?? true,
+    });
+    setNearbyCompanies([]);
+    setEtaSeconds(Number.isFinite(remainingEta) ? remainingEta : 0);
+    setInitialEtaSeconds(Number.isFinite(initialEta) && initialEta > 0 ? initialEta : Math.max(remainingEta, 0));
+    setRequestId(String(activeRequest.requestId));
+    setGpsError(null);
+    setCreatingRequest(false);
+  }, []);
 
   const openSOS = useCallback(() => {
+    const activeRequest = readActiveSosRequest();
+    if (activeRequest && (!activeRequest.owner || activeRequest.owner === sosOwner)) {
+      restoreActiveSOS(activeRequest);
+      return;
+    }
+
     setIsOpen(true);
     setStep("locating");
     setLocation("");
@@ -172,7 +243,7 @@ export function EmergencySOS() {
     setRequestId("");
     setGpsError(null);
     setCreatingRequest(false);
-  }, [currentUser?.name, currentUser?.phone]);
+  }, [currentUser?.name, currentUser?.phone, restoreActiveSOS, sosOwner]);
 
   const closeSOS = useCallback(() => {
     setIsOpen(false);
@@ -333,7 +404,7 @@ export function EmergencySOS() {
       return;
     }
     if (!contactInfo.name.trim() || !contactInfo.phone.trim()) {
-      setGpsError("Vui lòng nhập tên và số điện thoại để công ty liên hệ lại.");
+      setGpsError(INCOMPLETE_CONTACT_MESSAGE);
       return;
     }
 
@@ -364,9 +435,25 @@ export function EmergencySOS() {
 
       setSelectedCompany(company);
       const eta = Math.max(5, Number(company.responseTime ?? 5)) * 60;
+      const createdRequestId = String(created.request_id);
+      saveActiveSosRequest({
+        owner: sosOwner,
+        requestId: createdRequestId,
+        selectedIssue,
+        selectedCompany: company,
+        contactInfo: {
+          name: contactInfo.name.trim(),
+          phone: contactInfo.phone.trim(),
+          contactBackNow: contactInfo.contactBackNow,
+        },
+        location,
+        gpsCoords,
+        etaExpiresAt: Date.now() + eta * 1000,
+        initialEtaSeconds: eta,
+      });
       setEtaSeconds(eta);
       setInitialEtaSeconds(eta);
-      setRequestId(String(created.request_id));
+      setRequestId(createdRequestId);
       setStep("tracking");
     } catch (error) {
       console.error("Không thể tạo yêu cầu SOS:", error);
@@ -378,6 +465,7 @@ export function EmergencySOS() {
 
   const handleCancel = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    clearActiveSosRequest();
     if (requestId) {
       try {
         await updateRequestStatus(requestId, "cancelled", {
@@ -513,7 +601,10 @@ export function EmergencySOS() {
               {showGpsNotice && (
                 <div className="relative mt-3 mx-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <p className="text-xs text-yellow-700">
-                    <span className="font-semibold">Lưu ý:</span> Không thể xác định vị trí chính xác. Sử dụng danh sách công ty gần nhất.
+                    <span className="font-semibold">Lưu ý:</span>{" "}
+                    {gpsError === INCOMPLETE_CONTACT_MESSAGE
+                      ? gpsError
+                      : "Không thể xác định vị trí chính xác. Sử dụng danh sách công ty gần nhất."}
                   </p>
                 </div>
               )}

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import {
   Search,
   MapPin,
@@ -11,18 +11,20 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CheckCircle2,
   Loader,
   AlertCircle,
+  X,
 } from "lucide-react";
-import { getCompanies, getNearbyCompanies } from "../api/companies";
+import { getCompanies, getCompanyReviews, getNearbyCompanies } from "../api/companies";
 import { getServices } from "../api/services";
 import { toUiCompany, toUiService } from "../api/mappers";
 import { useGPS } from "../hooks/useGPS";
 import { calculateDistance, calculateETA, formatAddress } from "../utils/gpsUtils";
 import ServiceMap from "../components/ServiceMap";
+import { useApp } from "../context/useApp";
 
 export default function FindServices() {
+  const { currentRole } = useApp();
   const [searchText, setSearchText] = useState("");
   const [selectedService, setSelectedService] = useState("Tất cả");
   const [sortBy, setSortBy] = useState("distance");
@@ -36,6 +38,12 @@ export default function FindServices() {
   const [companies, setCompanies] = useState([]);
   const [displayAddress, setDisplayAddress] = useState("Đang xác định vị trí...");
   const [loadingNearby, setLoadingNearby] = useState(false);
+  const [reviewModal, setReviewModal] = useState({
+    open: false,
+    company: null,
+    reviews: [],
+    loading: false,
+  });
 
   const { location, fullAddress, addressComponents, loading: gpsLoading, error: gpsError, getCurrentLocation } = useGPS();
 
@@ -114,6 +122,17 @@ export default function FindServices() {
       setTimeout(() => {
         element.classList.remove("ring-2", "ring-pink-400");
       }, 2000);
+    }
+  };
+
+  const openCompanyReviews = async (company) => {
+    setReviewModal({ open: true, company, reviews: [], loading: true });
+    try {
+      const reviews = await getCompanyReviews(company.id ?? company.company_id);
+      setReviewModal({ open: true, company, reviews: reviews ?? [], loading: false });
+    } catch (error) {
+      console.error("Không thể tải đánh giá công ty:", error);
+      setReviewModal({ open: true, company, reviews: [], loading: false });
     }
   };
 
@@ -203,19 +222,12 @@ export default function FindServices() {
   }, [companies, searchText, selectedService, sortBy, getCompanyDistanceKm]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchText, selectedService, sortBy]);
-
-  useEffect(() => {
-    setCurrentPage((page) => Math.min(page, totalPages));
-  }, [totalPages]);
+  const safeCurrentPage = Math.min(currentPage, totalPages);
 
   const paginatedCompanies = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
+    const startIndex = (safeCurrentPage - 1) * itemsPerPage;
     return filtered.slice(startIndex, startIndex + itemsPerPage);
-  }, [filtered, currentPage]);
+  }, [filtered, safeCurrentPage]);
 
   const pageNumbers = useMemo(() => {
     if (totalPages <= 5) {
@@ -224,7 +236,7 @@ export default function FindServices() {
 
     const windowSize = 5;
     const halfWindow = Math.floor(windowSize / 2);
-    let startPage = Math.max(1, currentPage - halfWindow);
+    let startPage = Math.max(1, safeCurrentPage - halfWindow);
     let endPage = Math.min(totalPages, startPage + windowSize - 1);
 
     if (endPage - startPage + 1 < windowSize) {
@@ -232,7 +244,7 @@ export default function FindServices() {
     }
 
     return Array.from({ length: endPage - startPage + 1 }, (_, index) => startPage + index);
-  }, [currentPage, totalPages]);
+  }, [safeCurrentPage, totalPages]);
 
   const mapCompanies = useMemo(() => {
     if (!(useGPSLocation && location)) return [];
@@ -259,6 +271,10 @@ export default function FindServices() {
     return withCoords.slice(0, 20);
   }, [filtered, useGPSLocation, location, getCompanyDistanceKm]);
 
+  if (currentRole === "company") {
+    return <Navigate to="/company" replace />;
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
@@ -277,7 +293,10 @@ export default function FindServices() {
               type="text"
               placeholder="Tìm theo tên công ty hoặc khu vực..."
               value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
+              onChange={(e) => {
+                setSearchText(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
             />
           </div>
@@ -315,7 +334,10 @@ export default function FindServices() {
           <div className="relative">
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
+              onChange={(e) => {
+                setSortBy(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full appearance-none pl-4 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 cursor-pointer"
             >
               <option value="distance">Gần nhất</option>
@@ -342,7 +364,10 @@ export default function FindServices() {
               {serviceOptions.map((s) => (
                 <button
                   key={s}
-                  onClick={() => setSelectedService(s)}
+                  onClick={() => {
+                    setSelectedService(s);
+                    setCurrentPage(1);
+                  }}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                     selectedService === s
                       ? "bg-pink-500 text-white shadow-sm"
@@ -414,6 +439,13 @@ export default function FindServices() {
                           ) : (
                             <p className="text-xs text-gray-400 mt-1">Chưa có đánh giá</p>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => openCompanyReviews(company)}
+                            className="mt-1 text-xs font-semibold text-pink-600 hover:text-pink-700"
+                          >
+                            Xem đánh giá cụ thể
+                          </button>
                         </div>
                         <div className="text-right">
                           <span className="inline-flex items-center gap-1 text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full">
@@ -486,10 +518,10 @@ export default function FindServices() {
               {totalPages > 1 && (
                 <div className="bg-white rounded-2xl border border-pink-100 p-4 sm:p-5 flex flex-col gap-3">
                   <p className="text-sm text-gray-500">
-                    Hiển thị <span className="font-semibold text-gray-800">{(currentPage - 1) * itemsPerPage + 1}</span>
+                    Hiển thị <span className="font-semibold text-gray-800">{(safeCurrentPage - 1) * itemsPerPage + 1}</span>
                     {" "}đến{" "}
                     <span className="font-semibold text-gray-800">
-                      {Math.min(currentPage * itemsPerPage, filtered.length)}
+                      {Math.min(safeCurrentPage * itemsPerPage, filtered.length)}
                     </span>
                     {" "}trong <span className="font-semibold text-gray-800">{filtered.length}</span> kết quả
                   </p>
@@ -497,7 +529,7 @@ export default function FindServices() {
                   <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1">
                     <button
                       onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                      disabled={currentPage === 1}
+                      disabled={safeCurrentPage === 1}
                       className="inline-flex shrink-0 items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <ChevronLeft size={16} />
@@ -510,7 +542,7 @@ export default function FindServices() {
                           key={page}
                           onClick={() => setCurrentPage(page)}
                           className={`min-w-10 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
-                            page === currentPage
+                            page === safeCurrentPage
                               ? "bg-pink-500 text-white shadow-sm"
                               : "border border-gray-200 text-gray-700 hover:bg-pink-50 hover:text-pink-600"
                           }`}
@@ -522,7 +554,7 @@ export default function FindServices() {
 
                     <button
                       onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                      disabled={currentPage === totalPages}
+                      disabled={safeCurrentPage === totalPages}
                       className="inline-flex shrink-0 items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Sau
@@ -584,6 +616,69 @@ export default function FindServices() {
           </div> */}
         </div>
       </div>
+
+      {reviewModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-gray-900">{reviewModal.company?.name}</h3>
+                <p className="text-xs text-gray-500">Đánh giá từ những người dùng trước</p>
+              </div>
+              <button
+                onClick={() => setReviewModal({ open: false, company: null, reviews: [], loading: false })}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+              {reviewModal.loading ? (
+                <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-500">
+                  <Loader size={16} className="animate-spin" />
+                  Đang tải đánh giá...
+                </div>
+              ) : reviewModal.reviews.length === 0 ? (
+                <p className="py-10 text-center text-sm text-gray-400">Công ty này chưa có đánh giá.</p>
+              ) : (
+                reviewModal.reviews.map((review) => {
+                  const reviewerName = review.full_name || review.user_name || "Người dùng cũ";
+                  return (
+                    <div key={review.review_id} className="rounded-xl border border-pink-100 bg-pink-50/40 p-3">
+                      <div className="flex items-start gap-3">
+                        {review.avatar_url ? (
+                          <img src={review.avatar_url} alt={reviewerName} className="h-9 w-9 rounded-full object-cover" />
+                        ) : (
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-bold text-pink-600">
+                            {reviewerName.slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="truncate text-sm font-semibold text-gray-800">{reviewerName}</p>
+                            <div className="flex shrink-0 items-center gap-0.5">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star key={s} size={12} className={s <= Number(review.review_rating) ? "fill-yellow-400 text-yellow-400" : "text-gray-200"} />
+                              ))}
+                            </div>
+                          </div>
+                          {review.review_comment && (
+                            <p className="mt-1 text-sm text-gray-600">{review.review_comment}</p>
+                          )}
+                          <p className="mt-1 text-[11px] text-gray-400">
+                            {new Date(review.reviewed_at).toLocaleString("vi-VN")}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

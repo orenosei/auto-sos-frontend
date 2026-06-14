@@ -19,6 +19,7 @@ export function Layout({ children }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const isAdminShell = location.pathname.startsWith("/admin");
 
   const handleLogout = () => {
     logout();
@@ -49,8 +50,12 @@ export function Layout({ children }) {
 
   const navLinks = [
     { label: "Trang chủ", href: "/" },
-    { label: "Dịch vụ", href: "/find-services" },
-    { label: "Cộng đồng", href: "/community" },
+    ...(currentRole === "company"
+      ? []
+      : [
+          { label: "Dịch vụ", href: "/find-services" },
+          { label: "Cộng đồng", href: "/community" },
+        ]),
   ];
 
   const avatarSource =
@@ -67,12 +72,12 @@ export function Layout({ children }) {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Top Alert Bar */}
-      <div className="bg-pink-500 text-white text-center py-1.5 text-sm font-medium">
+      {!isAdminShell && <div className="bg-pink-500 text-white text-center py-1.5 text-sm font-medium">
         🚨 Khẩn cấp? Gọi ngay: <strong>1800 6789</strong> (Miễn phí 24/7)
-      </div>
+      </div>}
 
       {/* Navbar */}
-      <nav className="bg-white shadow-sm sticky top-0 z-50 border-b border-pink-100">
+      {!isAdminShell && <nav className="bg-white shadow-sm sticky top-0 z-50 border-b border-pink-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
@@ -226,7 +231,7 @@ export function Layout({ children }) {
             )}
           </div>
         )}
-      </nav>
+      </nav>}
 
       {/* Page Content */}
       <main className="flex-1">{children}</main>

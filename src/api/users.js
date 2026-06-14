@@ -18,6 +18,14 @@ export async function updateUser(userId, payload) {
   return res.data;
 }
 
+export async function changeUserPassword(userId, payload) {
+  const res = await apiRequest(`/api/users/${userId}/password`, {
+    method: "PUT",
+    body: payload,
+  });
+  return res.data;
+}
+
 export async function deleteUser(userId) {
   const res = await apiRequest(`/api/users/${userId}`, {
     method: "DELETE",
