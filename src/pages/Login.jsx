@@ -349,10 +349,14 @@ export default function Login() {
                     }
                   />
                   <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-                    <MapPin size={12} className="text-pink-400" />
-                    {companyRegisterForm.lat && companyRegisterForm.lng
-                      ? `${Number(companyRegisterForm.lat).toFixed(5)}, ${Number(companyRegisterForm.lng).toFixed(5)}`
-                      : "Nhấp vào bản đồ để chọn vị trí công ty"}
+                    <MapPin size={12} className={companyRegisterForm.lat && companyRegisterForm.lng ? "text-green-500" : "text-pink-400"} />
+                    {companyRegisterForm.lat && companyRegisterForm.lng ? (
+                      <span className="font-medium text-green-600">
+                        Đã chọn vị trí: {Number(companyRegisterForm.lat).toFixed(5)}, {Number(companyRegisterForm.lng).toFixed(5)}
+                      </span>
+                    ) : (
+                      "Nhấp vào bản đồ để chọn vị trí công ty"
+                    )}
                   </div>
                 </div>
 

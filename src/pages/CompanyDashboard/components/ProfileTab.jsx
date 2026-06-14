@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useCompanyDashboard } from '../CompanyDashboardContext';
-import { Camera, Edit, FileUp, MapPin, X } from "lucide-react";
-import { updateCompany } from "../../../api/companies";
+import { Camera, Edit, FileUp, Lock, MapPin, X } from "lucide-react";
+import { changeCompanyPassword, updateCompany } from "../../../api/companies";
 import { uploadFileToCloudinary } from "../../../api/uploads";
 import LocationPickerMap from "../../../components/LocationPickerMap";
 
@@ -10,6 +10,14 @@ export default function ProfileTab() {
   const { 
     updateCurrentUser, companyId, companyProfile, setCompanyName, setCompanyProfile, profileDraft, setProfileDraft, editingProfile, setEditingProfile, savingProfile, setSavingProfile, parseGeoJsonPoint
   } = context;
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: "",
+    new_password: "",
+    confirm_password: "",
+  });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
 
   const uploadProfileFile = async (file, folder, onDone) => {
     if (!file) return;
@@ -19,6 +27,51 @@ export default function ProfileTab() {
     } catch (e) {
       console.error(e);
       window.alert(e instanceof Error ? e.message : "Tải tệp thất bại");
+    }
+  };
+
+  const handlePasswordSubmit = async (event) => {
+    event.preventDefault();
+    if (!companyId) return;
+
+    const currentPassword = passwordForm.current_password;
+    const newPassword = passwordForm.new_password;
+    const confirmPassword = passwordForm.confirm_password;
+
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError("Vui lòng nhập đầy đủ thông tin đổi mật khẩu");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError("Mật khẩu mới phải có ít nhất 6 ký tự");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Mật khẩu xác nhận không khớp");
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      await changeCompanyPassword(companyId, {
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      setPasswordForm({
+        current_password: "",
+        new_password: "",
+        confirm_password: "",
+      });
+      setPasswordSuccess("Đã đổi mật khẩu thành công");
+    } catch (e) {
+      setPasswordError(e instanceof Error ? e.message : "Đổi mật khẩu thất bại");
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -167,10 +220,14 @@ export default function ProfileTab() {
                   }
                 />
                 <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-                  <MapPin size={12} className="text-pink-500" />
-                  {profileDraft.lat && profileDraft.lng
-                    ? `${Number(profileDraft.lat).toFixed(5)}, ${Number(profileDraft.lng).toFixed(5)}`
-                    : "Chưa chọn vị trí"}
+                  <MapPin size={12} className={profileDraft.lat && profileDraft.lng ? "text-green-500" : "text-pink-500"} />
+                  {profileDraft.lat && profileDraft.lng ? (
+                    <span className="font-medium text-green-600">
+                      Đã chọn vị trí: {Number(profileDraft.lat).toFixed(5)}, {Number(profileDraft.lng).toFixed(5)}
+                    </span>
+                  ) : (
+                    "Chưa chọn vị trí"
+                  )}
                 </div>
               </div>
 
@@ -323,6 +380,70 @@ export default function ProfileTab() {
               >
                 {savingProfile ? "Đang lưu..." : "Lưu thay đổi"}
               </button>
+
+              <form onSubmit={handlePasswordSubmit} className="mt-6 border-t border-gray-100 pt-5">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-700">
+                    <Lock size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">Đổi mật khẩu</h3>
+                    <p className="text-xs text-gray-500">Xác nhận mật khẩu hiện tại trước khi đổi mật khẩu công ty.</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-gray-600">Mật khẩu hiện tại</label>
+                    <input
+                      type="password"
+                      value={passwordForm.current_password}
+                      onChange={(e) => setPasswordForm((prev) => ({ ...prev, current_password: e.target.value }))}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-pink-400 focus:outline-none focus:ring-2 focus:ring-pink-100"
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-gray-600">Mật khẩu mới</label>
+                      <input
+                        type="password"
+                        value={passwordForm.new_password}
+                        onChange={(e) => setPasswordForm((prev) => ({ ...prev, new_password: e.target.value }))}
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-pink-400 focus:outline-none focus:ring-2 focus:ring-pink-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-gray-600">Nhập lại mật khẩu mới</label>
+                      <input
+                        type="password"
+                        value={passwordForm.confirm_password}
+                        onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirm_password: e.target.value }))}
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-pink-400 focus:outline-none focus:ring-2 focus:ring-pink-100"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {passwordError && (
+                  <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+                    {passwordError}
+                  </div>
+                )}
+                {passwordSuccess && (
+                  <div className="mt-3 rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {passwordSuccess}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={passwordSaving}
+                  className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Lock size={15} />
+                  {passwordSaving ? "Đang đổi..." : "Đổi mật khẩu"}
+                </button>
+              </form>
             </>
           )}
         </div>

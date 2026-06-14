@@ -23,7 +23,7 @@ import {
   Send,
 } from "lucide-react";
 import { useApp } from "../../context/useApp";
-import { getCompanies, getCompanyServices, getNearbyCompanies } from "../../api/companies";
+import { getCompanies, getCompanyReviews, getCompanyServices, getNearbyCompanies } from "../../api/companies";
 import { getServices } from "../../api/services";
 import { createRequest, getRequestServices, getRequests, updateRequestStatus } from "../../api/requests";
 import { addRequestImage, getRequestImages, uploadRequestImageToCloudinary } from "../../api/requestImages";
@@ -117,6 +117,12 @@ export default function UserDashboard() {
     imageUrls: [],
   });
   const [ratingModal, setRatingModal] = useState({ open: false, requestId: "" });
+  const [companyReviewModal, setCompanyReviewModal] = useState({
+    open: false,
+    company: null,
+    reviews: [],
+    loading: false,
+  });
   const [starValue, setStarValue] = useState(0);
   const [ratingText, setRatingText] = useState("");
   const [messageOpen, setMessageOpen] = useState(false);
@@ -127,6 +133,17 @@ export default function UserDashboard() {
   const [submittingRequest, setSubmittingRequest] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const toast = useToast();
+
+  const openCompanyReviews = async (company) => {
+    setCompanyReviewModal({ open: true, company, reviews: [], loading: true });
+    try {
+      const reviews = await getCompanyReviews(company.id ?? company.company_id);
+      setCompanyReviewModal({ open: true, company, reviews: reviews ?? [], loading: false });
+    } catch (e) {
+      console.error(e);
+      setCompanyReviewModal({ open: true, company, reviews: [], loading: false });
+    }
+  };
 
   const openMessageModal = async (req) => {
     setSelectedRequest(req);
@@ -161,6 +178,7 @@ export default function UserDashboard() {
       clearInterval(messageTimerRef.current);
       messageTimerRef.current = null;
     }
+    setMessageInput("");
   };
   const [gpsLoading, setGpsLoading] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
@@ -186,6 +204,29 @@ export default function UserDashboard() {
     setLoadingRequests(true);
     try {
       const backend = await getRequests({ user_id: userId });
+      const companyIds = [
+        ...new Set(
+          backend
+            .map((request) => request.company_id)
+            .filter((id) => id != null)
+            .map((id) => String(id))
+        ),
+      ];
+      const reviewRows = (
+        await Promise.all(
+          companyIds.map(async (companyId) => {
+            try {
+              return await getCompanyReviews(companyId);
+            } catch (err) {
+              console.warn(err);
+              return [];
+            }
+          })
+        )
+      ).flat();
+      const reviewByRequestId = new Map(
+        reviewRows.map((review) => [String(review.request_id), review])
+      );
 
       const mapped = await Promise.all(
         backend.map(async (r) => {
@@ -219,6 +260,12 @@ export default function UserDashboard() {
               servicePrice,
             }),
             imageUrls,
+            rating: reviewByRequestId.has(String(r.request_id))
+              ? Number(reviewByRequestId.get(String(r.request_id)).review_rating)
+              : null,
+            review: reviewByRequestId.get(String(r.request_id))?.review_comment ?? "",
+            reviewId: reviewByRequestId.get(String(r.request_id))?.review_id ?? null,
+            reviewedAt: reviewByRequestId.get(String(r.request_id))?.reviewed_at ?? null,
           };
         })
       );
@@ -583,6 +630,17 @@ export default function UserDashboard() {
   };
 
   const handleRatingSubmit = async () => {
+    const currentRequest = requests.find((request) => request.id === ratingModal.requestId);
+    if (currentRequest?.reviewId || currentRequest?.rating) {
+      window.alert("Yêu cầu này đã được đánh giá trước đó.");
+      setRatingModal({ open: false, requestId: "" });
+      return;
+    }
+    if (!starValue) {
+      window.alert("Vui lòng chọn số sao đánh giá.");
+      return;
+    }
+
     try {
       await addReview(ratingModal.requestId, {
         review_rating: starValue,
@@ -590,6 +648,8 @@ export default function UserDashboard() {
       });
     } catch (e) {
       console.error(e);
+      window.alert(e instanceof Error ? e.message : "Gửi đánh giá thất bại");
+      return;
     }
 
     setRatingModal({ open: false, requestId: "" });
@@ -601,7 +661,7 @@ export default function UserDashboard() {
   };
 
   const contextValue = {
-    currentUser, isLoggedIn, locationState, preselectedCompanyId, preselectedLat, preselectedLng, preselectedAddress, userId, services, setServices, companies, setCompanies, requests, setRequests, setLoadingRequests, activeTab, setActiveTab, selectedRequest, setSelectedRequest, newReq, setNewReq, ratingModal, setRatingModal, starValue, setStarValue, ratingText, setRatingText, messageOpen, setMessageOpen, messages, setMessages, messageInput, setMessageInput, messageTimerRef, sendingMessage, setSendingMessage, submittingRequest, setSubmittingRequest, gpsLoading, setGpsLoading, imageUploading, setImageUploading, imageInputRef, hasAutoGpsTriedRef, toast, refreshRequests, openMessageModal, closeMessageModal, requestServiceByName, availableRequestServices, selectedCompany, selectedCompanyService, companiesWithDistance, getGpsLocation, handleImageSelection, removeUploadedImage, handleRatingSubmit, submitRequest, cancelRequest, statusConfig, serviceIconMap, formatAddress, calculateDistance, calculateETA
+    currentUser, isLoggedIn, locationState, preselectedCompanyId, preselectedLat, preselectedLng, preselectedAddress, userId, services, setServices, companies, setCompanies, requests, setRequests, setLoadingRequests, activeTab, setActiveTab, selectedRequest, setSelectedRequest, newReq, setNewReq, ratingModal, setRatingModal, companyReviewModal, setCompanyReviewModal, openCompanyReviews, starValue, setStarValue, ratingText, setRatingText, messageOpen, setMessageOpen, messages, setMessages, messageInput, setMessageInput, messageTimerRef, sendingMessage, setSendingMessage, submittingRequest, setSubmittingRequest, gpsLoading, setGpsLoading, imageUploading, setImageUploading, imageInputRef, hasAutoGpsTriedRef, toast, refreshRequests, openMessageModal, closeMessageModal, requestServiceByName, availableRequestServices, selectedCompany, selectedCompanyService, companiesWithDistance, getGpsLocation, handleImageSelection, removeUploadedImage, handleRatingSubmit, submitRequest, cancelRequest, statusConfig, serviceIconMap, formatAddress, calculateDistance, calculateETA
   };
 
   return (
@@ -681,6 +741,69 @@ export default function UserDashboard() {
       {/* Tab: Track */}
       {activeTab === "track" && <TrackTab />}
 
+      {/* Company reviews modal */}
+      {companyReviewModal.open && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-lg shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-bold text-gray-900">{companyReviewModal.company?.name}</h3>
+                <p className="text-xs text-gray-500">Đánh giá từ những người dùng trước</p>
+              </div>
+              <button
+                onClick={() => setCompanyReviewModal({ open: false, company: null, reviews: [], loading: false })}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+              {companyReviewModal.loading ? (
+                <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-500">
+                  <Loader2 size={16} className="animate-spin" />
+                  Đang tải đánh giá...
+                </div>
+              ) : companyReviewModal.reviews.length === 0 ? (
+                <p className="py-10 text-center text-sm text-gray-400">Công ty này chưa có đánh giá.</p>
+              ) : (
+                companyReviewModal.reviews.map((review) => {
+                  const reviewerName = review.full_name || review.user_name || "Người dùng cũ";
+                  return (
+                    <div key={review.review_id} className="rounded-xl border border-pink-100 bg-pink-50/40 p-3">
+                      <div className="flex items-start gap-3">
+                        {review.avatar_url ? (
+                          <img src={review.avatar_url} alt={reviewerName} className="h-9 w-9 rounded-full object-cover" />
+                        ) : (
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-bold text-pink-600">
+                            {reviewerName.slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="truncate text-sm font-semibold text-gray-800">{reviewerName}</p>
+                            <div className="flex shrink-0 items-center gap-0.5">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star key={s} size={12} className={s <= Number(review.review_rating) ? "fill-yellow-400 text-yellow-400" : "text-gray-200"} />
+                              ))}
+                            </div>
+                          </div>
+                          {review.review_comment && (
+                            <p className="mt-1 text-sm text-gray-600">{review.review_comment}</p>
+                          )}
+                          <p className="mt-1 text-[11px] text-gray-400">
+                            {new Date(review.reviewed_at).toLocaleString("vi-VN")}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Rating modal */}
       {ratingModal.open && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -718,24 +841,39 @@ export default function UserDashboard() {
       {/* Message modal */}
       {messageOpen && selectedRequest && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-4 w-full max-w-lg shadow-2xl">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold">Chat với {selectedRequest.companyName || 'đơn vị cứu hộ'}</h3>
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between border-b border-pink-50 px-4 py-3">
+              <div>
+                <h3 className="font-bold text-gray-900">Chat với {selectedRequest.companyName || 'đơn vị cứu hộ'}</h3>
+                <p className="text-xs text-gray-500">Yêu cầu #{selectedRequest.id}</p>
+              </div>
               <button onClick={() => closeMessageModal()} className="text-gray-400 hover:text-gray-600"><X /></button>
             </div>
 
-            <div className="h-64 overflow-auto mb-3 p-2 border rounded-lg bg-gray-50" id="messages-scroll">
-              {messages.map((m) => (
-                <div key={m.message_id} className={`mb-2 p-2 rounded-lg ${m.message_sender === 'user' ? 'bg-pink-50 self-end text-right' : 'bg-white'}`}>
-                  <div className="text-xs text-gray-500 mb-1">{m.message_sender}</div>
-                  <div className="text-sm text-gray-800">{m.message_content}</div>
-                  <div className="text-xs text-gray-400 mt-1">{new Date(m.sent_at).toLocaleTimeString()}</div>
-                </div>
-              ))}
+            <div className="h-72 overflow-auto bg-gray-50 p-4" id="messages-scroll">
+              {messages.length === 0 ? (
+                <p className="py-10 text-center text-sm text-gray-400">Chưa có tin nhắn nào</p>
+              ) : (
+                messages.map((m) => {
+                  const isMine = m.message_sender === "user";
+                  const senderName = isMine ? (currentUser?.name || "Bạn") : (selectedRequest.companyName || "Đơn vị cứu hộ");
+                  return (
+                    <div key={m.message_id} className={`mb-3 flex ${isMine ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[78%] rounded-2xl px-3 py-2 shadow-sm ${isMine ? "bg-pink-500 text-white" : "bg-white text-gray-800 border border-gray-100"}`}>
+                        <div className={`mb-1 text-[11px] font-semibold ${isMine ? "text-pink-100" : "text-pink-600"}`}>{senderName}</div>
+                        <div className="text-sm leading-relaxed">{m.message_content}</div>
+                        <div className={`mt-1 text-[10px] ${isMine ? "text-pink-100" : "text-gray-400"}`}>
+                          {new Date(m.sent_at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
-            <div className="flex gap-2">
-              <input value={messageInput} onChange={(e) => setMessageInput(e.target.value)} placeholder="Nhập tin nhắn..." className="flex-1 px-3 py-2 border rounded-xl" />
+            <div className="flex gap-2 border-t border-pink-50 p-3">
+              <input value={messageInput} onChange={(e) => setMessageInput(e.target.value)} placeholder="Nhập tin nhắn..." className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pink-100" />
               <button
                 onClick={async () => {
                   if (!messageInput.trim() || sendingMessage) return;
@@ -755,7 +893,7 @@ export default function UserDashboard() {
                 disabled={sendingMessage}
                 className="px-4 py-2 bg-pink-500 text-white rounded-xl disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                {sendingMessage ? <Loader2 size={14} className="animate-spin" /> : "Gửi"}
+                {sendingMessage ? <Loader2 size={14} className="animate-spin" /> : <Send size={16} />}
               </button>
             </div>
           </div>

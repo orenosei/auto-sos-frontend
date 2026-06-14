@@ -7,10 +7,11 @@ function withUser(params, userId) {
   return qs ? `?${qs}` : "";
 }
 
-export async function getCommunityPosts({ category, q, userId } = {}) {
+export async function getCommunityPosts({ category, q, userId, authorUserId } = {}) {
   const params = {};
   if (category && category !== "Tất cả") params.category = category;
   if (q) params.q = q;
+  if (authorUserId) params.author_user_id = authorUserId;
   const res = await apiRequest(`/api/community/posts${withUser(params, userId)}`);
   return res.data;
 }
@@ -24,6 +25,22 @@ export async function createCommunityPost(input) {
   const res = await apiRequest("/api/community/posts", {
     method: "POST",
     body: input,
+  });
+  return res.data;
+}
+
+export async function updateCommunityPost(postId, input) {
+  const res = await apiRequest(`/api/community/posts/${postId}`, {
+    method: "PUT",
+    body: input,
+  });
+  return res.data;
+}
+
+export async function deleteCommunityPost(postId, userId) {
+  const res = await apiRequest(`/api/community/posts/${postId}`, {
+    method: "DELETE",
+    body: { user_id: userId },
   });
   return res.data;
 }

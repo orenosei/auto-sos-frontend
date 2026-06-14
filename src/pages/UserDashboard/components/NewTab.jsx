@@ -6,7 +6,7 @@ import LocationPickerMap from "../../../components/LocationPickerMap";
 export default function NewTab() {
   const context = useUserDashboard();
   const { 
-    setActiveTab, companies, newReq, setNewReq, submittingRequest, imageUploading, imageInputRef, availableRequestServices, selectedCompany, selectedCompanyService, companiesWithDistance, handleImageSelection, removeUploadedImage, submitRequest, serviceIconMap
+    setActiveTab, companies, newReq, setNewReq, submittingRequest, imageUploading, imageInputRef, availableRequestServices, selectedCompany, selectedCompanyService, companiesWithDistance, handleImageSelection, removeUploadedImage, submitRequest, serviceIconMap, openCompanyReviews
   } = context;
 
   const openImagePicker = () => {
@@ -47,9 +47,14 @@ export default function NewTab() {
               </p>
               <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
                 {companiesWithDistance.map((c) => (
-                  <button
+                  <div
                     key={c.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setNewReq({ ...newReq, selectedCompanyId: c.id })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") setNewReq({ ...newReq, selectedCompanyId: c.id });
+                    }}
                     className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
                       newReq.selectedCompanyId === c.id
                         ? "border-pink-400 bg-pink-50"
@@ -62,7 +67,7 @@ export default function NewTab() {
                         <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
                           <span className="flex items-center gap-1">
                             <Star size={11} className="fill-yellow-400 text-yellow-400" />
-                            {c.rating}
+                            {Number.isFinite(c.rating) ? c.rating.toFixed(1) : "Chưa có"}
                           </span>
                           <span className="flex items-center gap-1">
                             <MapPin size={11} className="text-pink-400" />
@@ -82,7 +87,17 @@ export default function NewTab() {
                         <CheckCircle2 size={20} className="text-pink-500" />
                       )}
                     </div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openCompanyReviews(c);
+                      }}
+                      className="mt-3 text-xs font-semibold text-pink-600 hover:text-pink-700"
+                    >
+                      Xem đánh giá cụ thể
+                    </button>
+                  </div>
                 ))}
               </div>
               <button

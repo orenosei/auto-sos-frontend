@@ -107,7 +107,9 @@ export default function LocationPickerMap({ lat, lng, onPick }) {
         {position && <Marker position={[position.lat, position.lng]} />}
       </MapContainer>
       <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-lg bg-white/95 px-3 py-2 text-xs font-medium text-gray-700 shadow-sm">
-        Nhấp vào bản đồ để chọn vị trí
+        {position
+          ? `Đã chọn: ${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}`
+          : "Nhấp vào bản đồ để chọn vị trí"}
       </div>
       <button
         type="button"

@@ -17,14 +17,17 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { Navigate } from "react-router-dom";
 import {
   createCommunityComment,
   createCommunityPost,
+  deleteCommunityPost,
   getCommunityPost,
   getCommunityPosts,
   reportCommunityContent,
   toggleCommunityCommentLike,
   toggleCommunityPostLike,
+  updateCommunityPost,
 } from "../api/community";
 import { uploadFileToCloudinary } from "../api/uploads";
 import { useApp } from "../context/useApp";
@@ -52,7 +55,7 @@ const tips = [
   { icon: "📱", title: "Lưu số hotline cứu hộ", desc: "Lưu sẵn ít nhất 2-3 số điện thoại cứu hộ trong danh bạ trước khi ra đường." },
 ];
 
-const emptyPost = { title: "", content: "", category: "Kinh nghiệm", tags: "", images: [] };
+const emptyPost = { title: "", content: "", category: "Kinh nghiệm", tags: "", images: [], existingImages: [] };
 
 function Avatar({ src, name, size = "md" }) {
   const sizeClass = size === "sm" ? "w-7 h-7 text-xs" : "w-9 h-9 text-sm";
@@ -88,10 +91,16 @@ export default function Community() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [newPostError, setNewPostError] = useState("");
   const [showNewPost, setShowNewPost] = useState(false);
+  const [editingPostId, setEditingPostId] = useState("");
   const [selectedPost, setSelectedPost] = useState(null);
   const [newPost, setNewPost] = useState(emptyPost);
   const [comment, setComment] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [myPostsOnly, setMyPostsOnly] = useState(false);
 
   const loadPosts = useCallback(async () => {
     setLoading(true);
@@ -101,6 +110,7 @@ export default function Community() {
         category: selectedCategory,
         q: searchText.trim(),
         userId,
+        authorUserId: myPostsOnly ? userId : undefined,
       });
       setPosts(data ?? []);
     } catch (err) {
@@ -108,20 +118,44 @@ export default function Community() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCategory, searchText, userId]);
+  }, [myPostsOnly, selectedCategory, searchText, userId]);
 
   useEffect(() => {
     const timer = setTimeout(loadPosts, 250);
     return () => clearTimeout(timer);
   }, [loadPosts]);
 
-  const stats = useMemo(
-    () => ({
-      posts: posts.length,
-      comments: posts.reduce((sum, post) => sum + Number(post.comments ?? 0), 0),
-    }),
-    [posts]
+  const sortedPosts = useMemo(() => {
+    return [...posts].sort((a, b) => {
+      if (sortBy === "popular") {
+        return Number(b.likes ?? 0) - Number(a.likes ?? 0);
+      }
+      if (sortBy === "comments") {
+        return Number(b.comments ?? 0) - Number(a.comments ?? 0);
+      }
+      if (sortBy === "oldest") {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [posts, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedPosts.length / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pagedPosts = useMemo(() => {
+    const startIndex = (safeCurrentPage - 1) * itemsPerPage;
+    return sortedPosts.slice(startIndex, startIndex + itemsPerPage);
+  }, [itemsPerPage, safeCurrentPage, sortedPosts]);
+  const newPostImagePreviews = useMemo(
+    () => newPost.images.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    [newPost.images]
   );
+
+  useEffect(() => {
+    return () => {
+      newPostImagePreviews.forEach((item) => URL.revokeObjectURL(item.url));
+    };
+  }, [newPostImagePreviews]);
 
   const requireUser = () => {
     if (canInteract) return true;
@@ -183,7 +217,7 @@ export default function Community() {
     if (!requireUser() || !newPost.title.trim() || !newPost.content.trim()) return;
 
     setSubmitting(true);
-    setError("");
+    setNewPostError("");
     try {
       const uploaded = [];
       for (const file of newPost.images) {
@@ -191,23 +225,77 @@ export default function Community() {
         uploaded.push(result.secureUrl);
       }
 
-      const created = await createCommunityPost({
+      const payload = {
         user_id: userId,
         title: newPost.title.trim(),
         content: newPost.content.trim(),
         category: newPost.category,
         tags: newPost.tags,
-        image_urls: uploaded,
-      });
+        image_urls: [...(newPost.existingImages ?? []), ...uploaded],
+      };
 
-      setPosts((prev) => [created, ...prev]);
+      const saved = editingPostId
+        ? await updateCommunityPost(editingPostId, payload)
+        : await createCommunityPost(payload);
+
+      setPosts((prev) =>
+        editingPostId
+          ? prev.map((post) => (post.id === String(editingPostId) ? saved : post))
+          : [saved, ...prev]
+      );
+      setSelectedPost((prev) => (prev?.id === String(editingPostId) ? saved : prev));
       setNewPost(emptyPost);
+      setNewPostError("");
+      setEditingPostId("");
       setShowNewPost(false);
     } catch (err) {
-      setError(err.message || "Không thể đăng bài");
+      setNewPostError(err.message || "Không thể đăng bài");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const openCreatePost = () => {
+    if (!requireUser()) return;
+    setEditingPostId("");
+    setNewPost(emptyPost);
+    setNewPostError("");
+    setShowNewPost(true);
+  };
+
+  const openEditPost = (post) => {
+    setEditingPostId(post.id);
+    setNewPost({
+      title: post.title ?? "",
+      content: post.content ?? "",
+      category: post.category ?? "Kinh nghiệm",
+      tags: (post.tags ?? []).join(", "),
+      images: [],
+      existingImages: post.images ?? [],
+    });
+    setNewPostError("");
+    setShowNewPost(true);
+  };
+
+  const removePost = async (post) => {
+    if (!requireUser()) return;
+    const ok = window.confirm(`Xóa bài viết "${post.title}"?`);
+    if (!ok) return;
+
+    try {
+      await deleteCommunityPost(post.id, userId);
+      setPosts((prev) => prev.filter((item) => item.id !== post.id));
+      setSelectedPost((prev) => (prev?.id === post.id ? null : prev));
+    } catch (err) {
+      setError(err.message || "Không thể xóa bài viết");
+    }
+  };
+
+  const closePostEditor = () => {
+    setShowNewPost(false);
+    setEditingPostId("");
+    setNewPost(emptyPost);
+    setNewPostError("");
   };
 
   const submitComment = async () => {
@@ -256,6 +344,10 @@ export default function Community() {
     }
   };
 
+  if (currentRole === "company") {
+    return <Navigate to="/company" replace />;
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
@@ -264,7 +356,7 @@ export default function Community() {
           <p className="text-gray-500">Chia sẻ kinh nghiệm và hỗ trợ lẫn nhau khi gặp sự cố xe</p>
         </div>
         <button
-          onClick={() => (requireUser() ? setShowNewPost(true) : null)}
+          onClick={openCreatePost}
           className="flex items-center gap-2 bg-linear-to-r from-pink-500 to-pink-400 text-white px-5 py-2.5 rounded-xl font-medium shadow-md shadow-pink-200 hover:scale-105 transition-all"
         >
           <Plus size={18} />
@@ -287,7 +379,10 @@ export default function Community() {
               type="text"
               placeholder="Tìm kiếm bài viết..."
               value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
+              onChange={(e) => {
+                setSearchText(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 bg-white"
             />
           </div>
@@ -296,7 +391,10 @@ export default function Community() {
             {categories.map((cat) => (
               <button
                 key={cat}
-                onClick={() => setSelectedCategory(cat)}
+                onClick={() => {
+                  setSelectedCategory(cat);
+                  setCurrentPage(1);
+                }}
                 className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
                   selectedCategory === cat
                     ? "bg-pink-500 text-white shadow-sm shadow-pink-200"
@@ -308,17 +406,66 @@ export default function Community() {
             ))}
           </div>
 
+          <div className="flex flex-col gap-3 rounded-2xl border border-pink-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-gray-500">
+              Tìm thấy <span className="font-semibold text-pink-600">{sortedPosts.length}</span> bài viết
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {canInteract && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMyPostsOnly((value) => !value);
+                    setCurrentPage(1);
+                  }}
+                  className={`rounded-xl border px-3 py-2 text-sm font-medium ${
+                    myPostsOnly
+                      ? "border-pink-500 bg-pink-50 text-pink-600"
+                      : "border-gray-200 text-gray-600 hover:bg-pink-50"
+                  }`}
+                >
+                  Bài của tôi
+                </button>
+              )}
+              <select
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-100"
+              >
+                <option value="newest">Mới nhất</option>
+                <option value="oldest">Cũ nhất</option>
+                <option value="popular">Nhiều lượt thích</option>
+                <option value="comments">Nhiều bình luận</option>
+              </select>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-100"
+              >
+                <option value={5}>5 bài/trang</option>
+                <option value={10}>10 bài/trang</option>
+                <option value={20}>20 bài/trang</option>
+              </select>
+            </div>
+          </div>
+
           {loading ? (
             <div className="flex items-center justify-center py-16 bg-white rounded-2xl border border-pink-100">
               <Loader2 size={28} className="animate-spin text-pink-500" />
             </div>
-          ) : posts.length === 0 ? (
+          ) : sortedPosts.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-2xl border border-pink-100">
               <MessageCircle size={48} className="text-pink-200 mx-auto mb-3" />
               <p className="text-gray-400">Không tìm thấy bài viết nào</p>
             </div>
           ) : (
-            posts.map((post) => (
+            pagedPosts.map((post) => (
               <article
                 key={post.id}
                 className="bg-white rounded-2xl border border-pink-100 p-5 hover:shadow-md hover:shadow-pink-50 transition-all"
@@ -397,9 +544,57 @@ export default function Community() {
                       Báo cáo
                     </button>
                   </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {String(post.userId) === String(userId) && (
+                      <>
+                        <button
+                          onClick={() => openEditPost(post)}
+                          className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          onClick={() => removePost(post)}
+                          className="rounded-xl border border-red-200 px-3 py-1.5 text-sm font-medium text-red-500 hover:bg-red-50"
+                        >
+                          Xóa
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => openPost(post)}
+                      className="rounded-xl border border-pink-200 px-3 py-1.5 text-sm font-medium text-pink-600 hover:bg-pink-50"
+                    >
+                      Xem chi tiết
+                    </button>
+                  </div>
                 </div>
               </article>
             ))
+          )}
+
+          {sortedPosts.length > itemsPerPage && (
+            <div className="flex items-center justify-between rounded-2xl border border-pink-100 bg-white px-4 py-3 text-sm">
+              <span className="text-gray-500">
+                Trang {safeCurrentPage}/{totalPages}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="rounded-lg border border-pink-200 px-3 py-1.5 text-pink-600 disabled:opacity-40"
+                >
+                  Trước
+                </button>
+                <button
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="rounded-lg border border-pink-200 px-3 py-1.5 text-pink-600 disabled:opacity-40"
+                >
+                  Sau
+                </button>
+              </div>
+            </div>
           )}
         </div>
 
@@ -449,12 +644,21 @@ export default function Community() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-pink-50">
-              <h3 className="font-bold text-gray-900">Đăng bài viết mới</h3>
-              <button onClick={() => setShowNewPost(false)} className="text-gray-400 hover:text-gray-600">
+              <h3 className="font-bold text-gray-900">{editingPostId ? "Chỉnh sửa bài viết" : "Đăng bài viết mới"}</h3>
+              <button
+                onClick={closePostEditor}
+                className="text-gray-400 hover:text-gray-600"
+              >
                 <X size={20} />
               </button>
             </div>
             <div className="p-6 space-y-4">
+              {newPostError && (
+                <div className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                  <span>{newPostError}</span>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Danh mục</label>
                 <div className="flex gap-2 flex-wrap">
@@ -512,17 +716,67 @@ export default function Community() {
                   type="file"
                   accept="image/*"
                   multiple
-                  onChange={(e) => setNewPost({ ...newPost, images: Array.from(e.target.files ?? []).slice(0, 6) })}
+                  onChange={(e) =>
+                    setNewPost({
+                      ...newPost,
+                      images: [...newPost.images, ...Array.from(e.target.files ?? [])].slice(
+                        0,
+                        Math.max(0, 6 - newPost.existingImages.length)
+                      ),
+                    })
+                  }
                   className="w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-pink-50 file:px-3 file:py-2 file:text-pink-600"
                 />
                 {newPost.images.length > 0 && (
-                  <p className="mt-1 text-xs text-gray-400">{newPost.images.length} ảnh đã chọn</p>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {newPostImagePreviews.map(({ file, url }, index) => (
+                      <div key={`${file.name}-${index}`} className="relative overflow-hidden rounded-xl border border-pink-100">
+                        <img src={url} alt={file.name} className="h-20 w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNewPost((prev) => ({
+                              ...prev,
+                              images: prev.images.filter((_, imageIndex) => imageIndex !== index),
+                            }))
+                          }
+                          className="absolute right-1 top-1 rounded-full bg-white/90 p-1 text-gray-500 hover:text-red-500"
+                          aria-label="Xóa ảnh"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
+                {newPost.existingImages.length > 0 && (
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {newPost.existingImages.map((src) => (
+                      <div key={src} className="relative overflow-hidden rounded-xl border border-pink-100">
+                        <img src={src} alt="" className="h-20 w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNewPost((prev) => ({
+                              ...prev,
+                              existingImages: prev.existingImages.filter((item) => item !== src),
+                            }))
+                          }
+                          className="absolute right-1 top-1 rounded-full bg-white/90 p-1 text-gray-500 hover:text-red-500"
+                          aria-label="Xóa ảnh"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-1 text-xs text-gray-400">Có thể chọn tối đa 6 ảnh.</p>
               </div>
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-pink-50">
               <button
-                onClick={() => setShowNewPost(false)}
+                onClick={closePostEditor}
                 className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50"
               >
                 Hủy
@@ -533,7 +787,7 @@ export default function Community() {
                 className="flex-1 flex items-center justify-center gap-2 bg-linear-to-r from-pink-500 to-pink-400 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 hover:shadow-md hover:shadow-pink-200 transition-all"
               >
                 {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                Đăng bài
+                {editingPostId ? "Lưu thay đổi" : "Đăng bài"}
               </button>
             </div>
           </div>
@@ -578,6 +832,22 @@ export default function Community() {
                       Báo cáo
                     </button>
                   </div>
+                  {String(selectedPost.userId) === String(userId) && (
+                    <div className="mb-4 flex justify-end gap-2">
+                      <button
+                        onClick={() => openEditPost(selectedPost)}
+                        className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                      >
+                        Sửa bài
+                      </button>
+                      <button
+                        onClick={() => removePost(selectedPost)}
+                        className="rounded-xl border border-red-200 px-3 py-1.5 text-sm font-medium text-red-500 hover:bg-red-50"
+                      >
+                        Xóa bài
+                      </button>
+                    </div>
+                  )}
                   <h2 className="font-bold text-gray-900 text-lg mb-3">{selectedPost.title}</h2>
                   <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{selectedPost.content}</p>
 

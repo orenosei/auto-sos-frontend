@@ -18,7 +18,7 @@ import { useApp } from "../context/useApp";
 import { EmergencySOS } from "../pages/Emergency";
 
 export default function Root() {
-  const { currentRole, notifications, markAllRead, unreadCount, isLoggedIn, logout, currentUser } = useApp();
+  const { currentRole, notifications, markAllRead, markRead, unreadCount, isLoggedIn, logout, currentUser } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const location = useLocation();
@@ -36,10 +36,17 @@ export default function Root() {
 
   const navLinks = [
     { to: "/", label: "Trang chủ", icon: <Home size={16} /> },
-    { to: "/find-services", label: "Tìm dịch vụ", icon: <Search size={16} /> },
-    { to: "/community", label: "Cộng đồng", icon: <Users size={16} /> },
+    ...(currentRole === "company"
+      ? []
+      : [
+          { to: "/find-services", label: "Tìm dịch vụ", icon: <Search size={16} /> },
+          { to: "/community", label: "Cộng đồng", icon: <Users size={16} /> },
+        ]),
     ...(currentRole === "user"
-      ? [{ to: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={16} /> }]
+      ? [
+          { to: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={16} /> },
+          { to: "/profile", label: "Profile", icon: <User size={16} /> },
+        ]
       : currentRole === "company"
       ? [{ to: "/company", label: "Cổng công ty", icon: <Building2 size={16} /> }]
       : [{ to: "/admin", label: "Quản trị", icon: <ShieldCheck size={16} /> }]),
@@ -114,9 +121,11 @@ export default function Root() {
                         <p className="text-center text-gray-400 py-6 text-sm">Không có thông báo</p>
                       ) : (
                         notifications.map((n) => (
-                          <div
+                          <button
+                            type="button"
                             key={n.id}
-                            className={`px-4 py-3 border-b border-gray-50 ${!n.read ? "bg-pink-50/50" : ""}`}
+                            onClick={() => markRead(n.id)}
+                            className={`w-full text-left px-4 py-3 border-b border-gray-50 transition-colors hover:bg-pink-50 ${!n.read ? "bg-pink-50/50" : ""}`}
                           >
                             <div className="flex items-start gap-2">
                               <div
@@ -138,7 +147,7 @@ export default function Root() {
                                 </p>
                               </div>
                             </div>
-                          </div>
+                          </button>
                         ))
                       )}
                     </div>
@@ -257,7 +266,7 @@ export default function Root() {
       </main>
 
       {/* Emergency SOS floating button */}
-      <EmergencySOS />
+      {currentRole !== "company" && <EmergencySOS />}
 
       {/* Footer */}
       <footer className="bg-white border-t border-pink-100 mt-16">

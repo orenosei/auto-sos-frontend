@@ -49,8 +49,12 @@ export function Layout({ children }) {
 
   const navLinks = [
     { label: "Trang chủ", href: "/" },
-    { label: "Dịch vụ", href: "/find-services" },
-    { label: "Cộng đồng", href: "/community" },
+    ...(currentRole === "company"
+      ? []
+      : [
+          { label: "Dịch vụ", href: "/find-services" },
+          { label: "Cộng đồng", href: "/community" },
+        ]),
   ];
 
   const avatarSource =

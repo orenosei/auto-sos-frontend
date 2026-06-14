@@ -29,12 +29,14 @@ export function toUiUser(role, data) {
 }
 
 export function toUiService(s) {
+  const rawPrice = pickNumeric(s, ["service_price", "price"]);
   return {
     id: String(s.service_id),
     name: s.service_name,
     description: s.service_description ?? "",
     icon: "🛠️",
-    price: "Liên hệ",
+    price: Number.isFinite(rawPrice) ? `${rawPrice.toLocaleString("vi-VN")}đ` : "Liên hệ",
+    priceNumber: Number.isFinite(rawPrice) ? rawPrice : null,
     duration: "",
   };
 }
@@ -52,14 +54,17 @@ function pickNumeric(obj, keys) {
 
 export function toUiCompany(c, companyServices) {
   const services = (companyServices ?? []).map((x) => x.service_name);
-  const serviceDetails = (companyServices ?? []).map((x) => ({
-    id: String(x.service_id),
-    service_id: x.service_id,
-    name: x.service_name,
-    service_name: x.service_name,
-    price: Number(x.service_price),
-    service_price: Number(x.service_price),
-  }));
+  const serviceDetails = (companyServices ?? []).map((x) => {
+    const rawPrice = pickNumeric(x, ["service_price", "price"]);
+    return {
+      id: String(x.service_id),
+      service_id: x.service_id,
+      name: x.service_name,
+      service_name: x.service_name,
+      price: Number.isFinite(rawPrice) ? rawPrice : null,
+      service_price: Number.isFinite(rawPrice) ? rawPrice : null,
+    };
+  });
   const geoLocation = parseGeoJsonPoint(c.absolute_address);
   const rawRating = pickNumeric(c, [
     "rating",

@@ -1,12 +1,63 @@
 import React from 'react';
 import { useCompanyDashboard } from '../CompanyDashboardContext';
 import { Bell, CheckCircle2, Loader2, MapPin, MessageCircle, Phone, ChevronRight, XCircle, AlertTriangle } from "lucide-react";
+import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+});
+
+function RequestLocationMap({ request }) {
+  const lat = Number(request?.latitude);
+  const lng = Number(request?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return (
+      <div className="mt-2 rounded-xl border border-yellow-100 bg-yellow-50 px-3 py-2 text-xs text-yellow-700">
+        Yêu cầu này chưa có tọa độ GPS để hiển thị trên bản đồ.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 h-48 overflow-hidden rounded-xl border border-pink-100 bg-gray-100">
+      <MapContainer
+        center={[lat, lng]}
+        zoom={15}
+        className="h-full w-full"
+        style={{ height: "100%", width: "100%" }}
+        scrollWheelZoom={false}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <Marker position={[lat, lng]}>
+          <Popup>
+            <div>
+              <p className="font-semibold">Vị trí khách hàng</p>
+              <p>{request.location || `${lat.toFixed(5)}, ${lng.toFixed(5)}`}</p>
+            </div>
+          </Popup>
+        </Marker>
+      </MapContainer>
+    </div>
+  );
+}
 
 export default function RequestsTab() {
   const context = useCompanyDashboard();
   const { 
     selectedReq, setSelectedReq, filterStatus, setFilterStatus, loadingRequests, selectedVehicleId, setSelectedVehicleId, etaMinutes, setEtaMinutes, finalPrice, setFinalPrice, statusUpdating, vehicles, availableVehicles, filtered, handleStatusUpdate, openMessageModal, statusConfig
   } = context;
+  const isEmergencyRequest = (req) => ["emergency", "critical"].includes(req?.priority);
+  const contactName = (req) => req.contactName || req.userName || "Chưa điền thông tin";
+  const contactPhone = (req) => req.contactPhone || req.userPhone || "Chưa điền thông tin";
+  const selectedContactPhone = selectedReq ? selectedReq.contactPhone || selectedReq.userPhone : "";
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
@@ -77,7 +128,7 @@ export default function RequestsTab() {
                           )}
                           <h3 className="font-semibold text-gray-800 text-sm">{req.serviceType}</h3>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1">{req.contactName || req.userName} · {req.contactPhone || req.userPhone}</p>
+                        <p className="text-sm text-gray-600 mt-1">{contactName(req)} · {contactPhone(req)}</p>
                         <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
                           <MapPin size={11} className="text-pink-400" />
                           {req.location}
@@ -108,11 +159,11 @@ export default function RequestsTab() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Khách hàng</span>
-                    <span className="font-medium text-gray-800">{selectedReq.contactName || selectedReq.userName}</span>
+                    <span className="font-medium text-gray-800">{contactName(selectedReq)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Điện thoại</span>
-                    <span className="font-medium text-pink-600">{selectedReq.contactPhone || selectedReq.userPhone}</span>
+                    <span className="font-medium text-pink-600">{contactPhone(selectedReq)}</span>
                   </div>
                   {selectedReq.contactBackNow && (
                     <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">
@@ -128,6 +179,7 @@ export default function RequestsTab() {
                   <div>
                     <span className="text-gray-500">Vị trí</span>
                     <p className="font-medium text-gray-800 mt-0.5">{selectedReq.location}</p>
+                    <RequestLocationMap request={selectedReq} />
                   </div>
                   <div>
                     <span className="text-gray-500">Mô tả</span>
@@ -280,11 +332,13 @@ export default function RequestsTab() {
                     </div>
                   )}
                   <div className="flex gap-2">
-                    <button onClick={() => openMessageModal(selectedReq)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-pink-200 text-pink-600 text-sm hover:bg-pink-50 transition-colors">
-                      <MessageCircle size={15} />
-                      Nhắn tin
-                    </button>
-                    <a href={`tel:${selectedReq.contactPhone || selectedReq.userPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-pink-200 text-pink-600 text-sm hover:bg-pink-50 transition-colors">
+                    {!isEmergencyRequest(selectedReq) && (
+                      <button onClick={() => openMessageModal(selectedReq)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-pink-200 text-pink-600 text-sm hover:bg-pink-50 transition-colors">
+                        <MessageCircle size={15} />
+                        Nhắn tin
+                      </button>
+                    )}
+                    <a href={selectedContactPhone ? `tel:${selectedContactPhone}` : undefined} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-pink-200 text-pink-600 text-sm hover:bg-pink-50 transition-colors">
                       <Phone size={15} />
                       Gọi điện
                     </a>
