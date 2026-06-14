@@ -1,12 +1,13 @@
 import { apiRequest } from "./http";
 
-export async function getRequests(params) {
+export async function getRequests(params = {}) {
   const search = new URLSearchParams();
   if (params.user_id != null) search.set("user_id", String(params.user_id));
   if (params.company_id != null) search.set("company_id", String(params.company_id));
   if (params.request_status != null) search.set("request_status", String(params.request_status));
 
-  const res = await apiRequest(`/api/requests?${search.toString()}`);
+  const qs = search.toString();
+  const res = await apiRequest(`/api/requests${qs ? `?${qs}` : ""}`);
   return res.data;
 }
 

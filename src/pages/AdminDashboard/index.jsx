@@ -21,8 +21,8 @@ import RequestsTab from './components/RequestsTab';
 import ContentTab from './components/ContentTab';
 import { AdminDashboardContext } from "./AdminDashboardContext";
 import { deleteUser, getUsers, updateUser } from "../../api/users";
-import { getCompanies, updateCompany } from "../../api/companies";
-import { getRequests, getRequestServices } from "../../api/requests";
+import { deleteCompany, getCompanies, updateCompany } from "../../api/companies";
+import { getRequests } from "../../api/requests";
 import { toUiRequest } from "../../api/mappers";
 import {
   BarChart,
@@ -39,6 +39,25 @@ import {
 } from "recharts";
 
 const PIE_COLORS = ["#f472b6", "#f472b6", "#a78bfa", "#fb923c", "#34d399"];
+const LOCKED_COMPANIES_KEY = "rescuesos.admin.lockedCompanies";
+
+const loadLockedCompanies = () => {
+  try {
+    const raw = window.localStorage.getItem(LOCKED_COMPANIES_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveLockedCompanies = (ids) => {
+  try {
+    window.localStorage.setItem(LOCKED_COMPANIES_KEY, JSON.stringify(ids));
+  } catch {
+    // ignore storage failures
+  }
+};
 
 const statusConfig = {
   pending: { label: "Chờ tiếp nhận", color: "text-yellow-600 bg-yellow-50 border-yellow-200" },
@@ -58,6 +77,10 @@ export default function AdminDashboard() {
   const [companies, setCompanies] = useState([]);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedCompany, setSelectedCompany] = useState(null);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [lockedCompanyIds, setLockedCompanyIds] = useState(loadLockedCompanies);
 
   const computedStats = useMemo(() => {
     const totalUsers = users.length;
@@ -66,8 +89,8 @@ export default function AdminDashboard() {
     const totalRequests = requests.length;
     const completedRequests = requests.filter((r) => r.status === "completed").length;
     const pendingRequests = requests.filter((r) => r.status === "pending").length;
+    const emergencyRequests = requests.filter((r) => ["critical", "emergency", "urgent", "high"].includes(r.priority)).length;
     const activeUsers = users.filter((u) => u.isActive).length;
-    const totalRevenue = requests.reduce((sum, r) => sum + (Number(r.finalPrice ?? r.servicePrice) || 0), 0);
     const completionRate =
       totalRequests === 0 ? 0 : Math.round((completedRequests / totalRequests) * 100);
 
@@ -79,7 +102,7 @@ export default function AdminDashboard() {
       totalRequests,
       completedRequests,
       pendingRequests,
-      totalRevenue,
+      emergencyRequests,
       completionRate,
     };
   }, [users, companies, requests]);
@@ -140,6 +163,7 @@ export default function AdminDashboard() {
         }));
         setUsers(uiUsers);
 
+        const lockedIds = new Set(loadLockedCompanies());
         const uiCompanies = c.map((x) => ({
           id: String(x.company_id),
           name: x.company_name,
@@ -151,8 +175,12 @@ export default function AdminDashboard() {
             ? x.verification_document_urls
             : [],
           verified: !!x.is_verified,
-          rating: 4.5,
-          totalReviews: 0,
+          phone: x.company_phone ?? "",
+          registeredAt: x.registered_at,
+          rating: Number(x.average_rating ?? 0) || 0,
+          totalReviews: Number(x.review_count ?? 0) || 0,
+          responseTime: Number(x.avg_response_minutes ?? 0) || 0,
+          locked: lockedIds.has(String(x.company_id)),
         }));
         setCompanies(uiCompanies);
 
@@ -160,38 +188,20 @@ export default function AdminDashboard() {
         const companyNameById = new Map(uiCompanies.map((x) => [x.id, x.name]));
 
         const requestsById = new Map();
-        const settled = await Promise.allSettled(
-          uiCompanies.map(async (co) => {
-            const backend = await getRequests({ company_id: co.id });
-            for (const r of backend) {
-              let serviceType = "";
-              let servicePrice = null;
-              try {
-                const svc = await getRequestServices(r.request_id);
-                serviceType = svc.data?.[0]?.service_name ?? "";
-                servicePrice = svc.data?.[0]?.service_price ?? null;
-              } catch {
-                // ignore
-              }
+        const backendRequests = await getRequests();
+        for (const r of backendRequests) {
+            const urow = r.user_id != null ? userById.get(String(r.user_id)) : undefined;
+            const mapped = toUiRequest(r, {
+              userName: urow?.name ?? r.contact_name ?? "",
+              userPhone: urow?.phone ?? r.contact_phone ?? "",
+              companyName: r.company_id != null ? companyNameById.get(String(r.company_id)) : undefined,
+              serviceType: r.issue_type || "Chưa chọn dịch vụ",
+            });
 
-              const urow = r.user_id != null ? userById.get(String(r.user_id)) : undefined;
-
-              const mapped = toUiRequest(r, {
-                userName: urow?.name ?? "",
-                userPhone: urow?.phone ?? "",
-                companyName: r.company_id != null ? companyNameById.get(String(r.company_id)) : undefined,
-                serviceType,
-                servicePrice,
-              });
-
-              requestsById.set(mapped.id, mapped);
-            }
-          })
-        );
+            requestsById.set(mapped.id, mapped);
+        }
 
         if (cancelled) return;
-        // ignore individual company failures
-        void settled;
 
         setRequests(Array.from(requestsById.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)));
       } catch (e) {
@@ -250,9 +260,12 @@ export default function AdminDashboard() {
     }
     try {
       const updated = await updateCompany(company.id, { is_verified: !company.verified });
+      const nextLockedIds = lockedCompanyIds.filter((id) => id !== String(company.id));
+      setLockedCompanyIds(nextLockedIds);
+      saveLockedCompanies(nextLockedIds);
       setCompanies((prev) =>
         prev.map((c) =>
-          c.id === company.id ? { ...c, verified: !!updated.is_verified } : c
+          c.id === company.id ? { ...c, verified: !!updated.is_verified, locked: false } : c
         )
       );
     } catch (e) {
@@ -261,8 +274,59 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleLockCompany = async (company) => {
+    const ok = window.confirm(`Bạn có chắc muốn khóa công ty "${company.name}"?`);
+    if (!ok) return;
+    try {
+      const updated = await updateCompany(company.id, { is_verified: false });
+      const nextLockedIds = Array.from(new Set([...lockedCompanyIds, String(company.id)]));
+      setLockedCompanyIds(nextLockedIds);
+      saveLockedCompanies(nextLockedIds);
+      setCompanies((prev) =>
+        prev.map((c) =>
+          c.id === company.id ? { ...c, verified: !!updated.is_verified, locked: true } : c
+        )
+      );
+    } catch (e) {
+      console.error(e);
+      window.alert(e instanceof Error ? e.message : "Khóa công ty thất bại");
+    }
+  };
+
+  const handleUnlockCompany = async (company) => {
+    const ok = window.confirm(`Mở khóa công ty "${company.name}"?`);
+    if (!ok) return;
+    const nextLockedIds = lockedCompanyIds.filter((id) => id !== String(company.id));
+    setLockedCompanyIds(nextLockedIds);
+    saveLockedCompanies(nextLockedIds);
+    setCompanies((prev) =>
+      prev.map((c) =>
+        c.id === company.id ? { ...c, locked: false, verified: false } : c
+      )
+    );
+  };
+
+  const handleDeleteCompany = async (company) => {
+    const ok = window.confirm(`Xóa công ty "${company.name}"? Các dữ liệu liên quan có thể bị ảnh hưởng.`);
+    if (!ok) return;
+    try {
+      await deleteCompany(company.id);
+      setCompanies((prev) => prev.filter((c) => c.id !== company.id));
+      setRequests((prev) => prev.map((r) => (r.companyId === company.id ? { ...r, companyName: "" } : r)));
+    } catch (e) {
+      console.error(e);
+      window.alert(e instanceof Error ? e.message : "Xóa công ty thất bại");
+    }
+  };
+
+  const getCompanyRequestCount = (companyId) =>
+    requests.filter((r) => r.companyId === String(companyId)).length;
+
+  const getUserRequestCount = (userId) =>
+    requests.filter((r) => r.userId === String(userId)).length;
+
   const contextValue = {
-    activeTab, setActiveTab, users, setUsers, companies, setCompanies, requests, setRequests, loading, setLoading, searchText, setSearchText, computedStats, monthlyData, serviceDistribution, handleDeleteUser, handleToggleUserActive, handleToggleCompanyVerified, statusConfig, PIE_COLORS
+    activeTab, setActiveTab, users, setUsers, companies, setCompanies, requests, setRequests, loading, setLoading, searchText, setSearchText, computedStats, monthlyData, serviceDistribution, handleDeleteUser, handleToggleUserActive, handleToggleCompanyVerified, handleLockCompany, handleUnlockCompany, handleDeleteCompany, setSelectedUser, setSelectedCompany, setSelectedRequest, getCompanyRequestCount, getUserRequestCount, statusConfig, PIE_COLORS
   };
 
   return (
@@ -312,7 +376,85 @@ export default function AdminDashboard() {
 
       {/* Content Moderation Tab */}
       {activeTab === "content" && <ContentTab />}
+
+      {selectedUser && (
+        <DetailModal title="Chi tiết người dùng" onClose={() => setSelectedUser(null)}>
+          <DetailRow label="Tên" value={selectedUser.name} />
+          <DetailRow label="Email" value={selectedUser.email || "Chưa cập nhật"} />
+          <DetailRow label="Điện thoại" value={selectedUser.phone || "Chưa cập nhật"} />
+          <DetailRow label="Vai trò" value={selectedUser.role === "admin" ? "Admin" : "User"} />
+          <DetailRow label="Trạng thái" value={selectedUser.isActive ? "Hoạt động" : "Đã khóa"} />
+          <DetailRow label="Số yêu cầu" value={getUserRequestCount(selectedUser.id)} />
+          <DetailRow label="Ngày tham gia" value={selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleString("vi-VN") : ""} />
+        </DetailModal>
+      )}
+
+      {selectedCompany && (
+        <DetailModal title="Chi tiết công ty" onClose={() => setSelectedCompany(null)}>
+          <DetailRow label="Tên công ty" value={selectedCompany.name} />
+          <DetailRow label="Điện thoại" value={selectedCompany.phone || "Chưa cập nhật"} />
+          <DetailRow label="Địa chỉ" value={selectedCompany.address || "Chưa cập nhật"} />
+          <DetailRow label="Khu vực hoạt động" value={selectedCompany.operatingArea || "Chưa cập nhật"} />
+          <DetailRow label="Giấy phép" value={selectedCompany.license || "Chưa cập nhật"} />
+          <DetailRow label="Trạng thái" value={selectedCompany.locked ? "Đã khóa" : selectedCompany.verified ? "Đã xác minh" : "Chờ xác minh"} />
+          <DetailRow label="Đánh giá" value={`${selectedCompany.rating || 0}/5 (${selectedCompany.totalReviews || 0} lượt)`} />
+          <DetailRow label="Số yêu cầu" value={getCompanyRequestCount(selectedCompany.id)} />
+          <DetailRow label="Ngày đăng ký" value={selectedCompany.registeredAt ? new Date(selectedCompany.registeredAt).toLocaleString("vi-VN") : ""} />
+          {selectedCompany.verificationDocumentUrls?.length > 0 && (
+            <div className="pt-3">
+              <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Tài liệu kiểm duyệt</p>
+              <div className="flex flex-wrap gap-2">
+                {selectedCompany.verificationDocumentUrls.map((url, index) => (
+                  <a key={url} href={url} target="_blank" rel="noreferrer" className="rounded-lg border border-pink-100 px-3 py-1.5 text-sm text-pink-600 hover:bg-pink-50">
+                    Tài liệu {index + 1}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+        </DetailModal>
+      )}
+
+      {selectedRequest && (
+        <DetailModal title="Chi tiết yêu cầu" onClose={() => setSelectedRequest(null)}>
+          <DetailRow label="Mã yêu cầu" value={selectedRequest.id} />
+          <DetailRow label="Mức độ" value={["critical", "emergency", "urgent", "high"].includes(selectedRequest.priority) ? "Khẩn cấp" : "Thường"} />
+          <DetailRow label="Người dùng" value={`${selectedRequest.userName || selectedRequest.contactName || "Chưa điền"} - ${selectedRequest.userPhone || selectedRequest.contactPhone || "Chưa điền"}`} />
+          <DetailRow label="Công ty" value={selectedRequest.companyName || "Chưa có công ty"} />
+          <DetailRow label="Dịch vụ" value={selectedRequest.serviceType || selectedRequest.issueType || "Chưa chọn"} />
+          <DetailRow label="Trạng thái" value={(statusConfig[selectedRequest.status] ?? statusConfig.pending).label} />
+          <DetailRow label="Địa chỉ" value={selectedRequest.location || "Chưa cập nhật"} />
+          <DetailRow label="Tọa độ" value={selectedRequest.latitude && selectedRequest.longitude ? `${Number(selectedRequest.latitude).toFixed(5)}, ${Number(selectedRequest.longitude).toFixed(5)}` : "Không có"} />
+          <DetailRow label="Mô tả" value={selectedRequest.description || "Không có"} />
+          <DetailRow label="Ngày tạo" value={selectedRequest.createdAt ? new Date(selectedRequest.createdAt).toLocaleString("vi-VN") : ""} />
+        </DetailModal>
+      )}
     </div>
     </AdminDashboardContext.Provider>
+  );
+}
+
+function DetailModal({ title, onClose, children }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
+          <button onClick={onClose} className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50">
+            Đóng
+          </button>
+        </div>
+        <div className="divide-y divide-gray-100">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }) {
+  return (
+    <div className="grid gap-1 py-3 sm:grid-cols-[180px_1fr] sm:gap-4">
+      <p className="text-xs font-semibold uppercase text-gray-400">{label}</p>
+      <p className="text-sm font-medium text-gray-800">{value}</p>
+    </div>
   );
 }

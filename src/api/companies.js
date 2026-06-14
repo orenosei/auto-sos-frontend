@@ -79,3 +79,10 @@ export async function changeCompanyPassword(companyId, payload) {
   });
   return res.data;
 }
+
+export async function deleteCompany(companyId) {
+  const res = await apiRequest(`/api/companies/${companyId}`, {
+    method: "DELETE",
+  });
+  return res.data;
+}

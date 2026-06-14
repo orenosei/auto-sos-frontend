@@ -1,12 +1,36 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAdminDashboard } from '../AdminDashboardContext';
 import { ShieldCheck, ShieldX, Search, Eye, Trash2 } from "lucide-react";
 
 export default function UsersTab() {
   const context = useAdminDashboard();
   const { 
-    users, searchText, setSearchText, computedStats, handleDeleteUser, handleToggleUserActive
+    users, searchText, setSearchText, computedStats, handleDeleteUser, handleToggleUserActive, setSelectedUser
   } = context;
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const pageSize = 8;
+
+  const filteredUsers = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+    return users.filter((u) => {
+      const matchesSearch =
+        !keyword ||
+        u.name.toLowerCase().includes(keyword) ||
+        u.email.toLowerCase().includes(keyword) ||
+        String(u.phone ?? "").toLowerCase().includes(keyword);
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" ? u.isActive : !u.isActive);
+      const matchesRole = roleFilter === "all" || u.role === roleFilter;
+      return matchesSearch && matchesStatus && matchesRole;
+    });
+  }, [roleFilter, searchText, statusFilter, users]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageUsers = filteredUsers.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
     <div>
@@ -17,12 +41,39 @@ export default function UsersTab() {
                 type="text"
                 placeholder="Tìm người dùng..."
                 value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
+                onChange={(e) => {
+                  setSearchText(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
               />
             </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(1);
+              }}
+              className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-100"
+            >
+              <option value="all">Tất cả trạng thái</option>
+              <option value="active">Hoạt động</option>
+              <option value="locked">Đã khóa</option>
+            </select>
+            <select
+              value={roleFilter}
+              onChange={(e) => {
+                setRoleFilter(e.target.value);
+                setPage(1);
+              }}
+              className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-100"
+            >
+              <option value="all">Tất cả vai trò</option>
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
             <span className="text-sm text-gray-500">
-              Tổng: {computedStats.totalUsers.toLocaleString()} người dùng · {computedStats.activeUsers} đang hoạt động
+              Tổng: {computedStats.totalUsers.toLocaleString()} người dùng · {filteredUsers.length} phù hợp
             </span>
           </div>
           <div className="bg-white rounded-2xl border border-pink-100 overflow-hidden">
@@ -40,13 +91,7 @@ export default function UsersTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users
-                    .filter(
-                      (u) =>
-                        u.name.toLowerCase().includes(searchText.toLowerCase()) ||
-                        u.email.toLowerCase().includes(searchText.toLowerCase())
-                    )
-                    .map((user) => (
+                  {pageUsers.map((user) => (
                       <tr key={user.id} className="border-b border-gray-50 hover:bg-pink-50/30 transition-colors">
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
@@ -77,7 +122,11 @@ export default function UsersTab() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
-                            <button className="p-1.5 rounded-lg hover:bg-pink-50 text-pink-500 transition-colors">
+                            <button
+                              onClick={() => setSelectedUser(user)}
+                              className="p-1.5 rounded-lg hover:bg-pink-50 text-pink-500 transition-colors"
+                              title="Xem chi tiết"
+                            >
                               <Eye size={14} />
                             </button>
                             <button
@@ -103,6 +152,27 @@ export default function UsersTab() {
                     ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center justify-between gap-3 text-sm text-gray-500">
+            <span>
+              Trang {safePage}/{totalPages} · {filteredUsers.length} kết quả
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                disabled={safePage === 1}
+                className="rounded-xl border border-gray-200 px-3 py-2 font-medium text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Trước
+              </button>
+              <button
+                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={safePage === totalPages}
+                className="rounded-xl border border-gray-200 px-3 py-2 font-medium text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Sau
+              </button>
             </div>
           </div>
         </div>

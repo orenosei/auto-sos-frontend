@@ -23,6 +23,7 @@ export default function Root() {
   const [notifOpen, setNotifOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const isAdminShell = location.pathname.startsWith("/admin");
   const avatarSource =
     currentUser?.avatarUrl ||
     (typeof currentUser?.avatar === "string" &&
@@ -58,7 +59,7 @@ export default function Root() {
   return (
     <div className="min-h-screen bg-linear-to-br from-pink-50 via-white to-pink-50">
       {/* Navbar */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-pink-100 shadow-sm">
+      {!isAdminShell && <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-pink-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
@@ -258,7 +259,7 @@ export default function Root() {
             </div>
           </div>
         )}
-      </header>
+      </header>}
 
       {/* Main content */}
       <main className="flex-1">
@@ -266,10 +267,10 @@ export default function Root() {
       </main>
 
       {/* Emergency SOS floating button */}
-      {currentRole !== "company" && <EmergencySOS />}
+      {currentRole === "user" && !isAdminShell && <EmergencySOS />}
 
       {/* Footer */}
-      <footer className="bg-white border-t border-pink-100 mt-16">
+      {!isAdminShell && <footer className="bg-white border-t border-pink-100 mt-16">
         <div className="max-w-7xl mx-auto px-4 py-10">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
             <div>
@@ -316,7 +317,7 @@ export default function Root() {
             © 2026 RescueSOS. Hệ thống hỗ trợ sự cố xe trên đường.
           </div>
         </div>
-      </footer>
+      </footer>}
     </div>
   );
 }
