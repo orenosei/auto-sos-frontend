@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { formatAdministrativeAddress, reverseGeocode } from "../utils/gpsUtils";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -55,8 +56,10 @@ function MapSizeFixer() {
   return null;
 }
 
-export default function LocationPickerMap({ lat, lng, onPick }) {
+export default function LocationPickerMap({ lat, lng, address, onPick }) {
   const [locating, setLocating] = useState(false);
+  const [resolvingAddress, setResolvingAddress] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState("");
   const position = useMemo(() => {
     const parsedLat = Number(lat);
     const parsedLng = Number(lng);
@@ -68,6 +71,26 @@ export default function LocationPickerMap({ lat, lng, onPick }) {
 
   const center = position ? [position.lat, position.lng] : [21.0278, 105.8342];
 
+  const resolveAndPick = async ({ lat: pickedLat, lng: pickedLng }) => {
+    setResolvingAddress(true);
+    try {
+      const geocoded = await reverseGeocode(pickedLat, pickedLng);
+      const address = formatAdministrativeAddress(
+        geocoded.fullAddress,
+        geocoded.address_components
+      );
+      setSelectedAddress(address);
+      onPick?.({ lat: pickedLat, lng: pickedLng, address });
+    } catch (error) {
+      console.error("Không thể lấy địa chỉ hành chính:", error);
+      const address = "Không thể lấy địa chỉ hành chính";
+      setSelectedAddress(address);
+      onPick?.({ lat: pickedLat, lng: pickedLng, address });
+    } finally {
+      setResolvingAddress(false);
+    }
+  };
+
   const pickCurrentLocation = () => {
     if (!navigator.geolocation) {
       window.alert("Trình duyệt không hỗ trợ lấy vị trí hiện tại.");
@@ -77,7 +100,7 @@ export default function LocationPickerMap({ lat, lng, onPick }) {
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        onPick?.({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        resolveAndPick({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         setLocating(false);
       },
       () => {
@@ -101,14 +124,16 @@ export default function LocationPickerMap({ lat, lng, onPick }) {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <MapClickHandler onPick={onPick} />
+        <MapClickHandler onPick={resolveAndPick} />
         <MapSizeFixer />
         <Recenter position={position} />
         {position && <Marker position={[position.lat, position.lng]} />}
       </MapContainer>
       <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-lg bg-white/95 px-3 py-2 text-xs font-medium text-gray-700 shadow-sm">
-        {position
-          ? `Đã chọn: ${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}`
+        {resolvingAddress
+          ? "Đang xác định địa chỉ..."
+          : position
+          ? selectedAddress || address || "Đã chọn vị trí trên bản đồ"
           : "Nhấp vào bản đồ để chọn vị trí"}
       </div>
       <button

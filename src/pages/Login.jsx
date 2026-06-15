@@ -340,11 +340,13 @@ export default function Login() {
                   <LocationPickerMap
                     lat={companyRegisterForm.lat}
                     lng={companyRegisterForm.lng}
+                    address={companyRegisterForm.relative_address}
                     onPick={(point) =>
                       setCompanyRegisterForm((f) => ({
                         ...f,
                         lat: String(point.lat),
                         lng: String(point.lng),
+                        relative_address: point.address || f.relative_address,
                       }))
                     }
                   />
@@ -352,7 +354,7 @@ export default function Login() {
                     <MapPin size={12} className={companyRegisterForm.lat && companyRegisterForm.lng ? "text-green-500" : "text-pink-400"} />
                     {companyRegisterForm.lat && companyRegisterForm.lng ? (
                       <span className="font-medium text-green-600">
-                        Đã chọn vị trí: {Number(companyRegisterForm.lat).toFixed(5)}, {Number(companyRegisterForm.lng).toFixed(5)}
+                        Đã chọn vị trí: {companyRegisterForm.relative_address || "Đang xác định địa chỉ..."}
                       </span>
                     ) : (
                       "Nhấp vào bản đồ để chọn vị trí công ty"

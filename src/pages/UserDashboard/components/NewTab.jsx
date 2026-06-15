@@ -221,18 +221,20 @@ export default function NewTab() {
                   <LocationPickerMap
                     lat={newReq.latitude}
                     lng={newReq.longitude}
+                    address={newReq.location}
                     onPick={(point) =>
                       setNewReq({
                         ...newReq,
                         latitude: point.lat,
                         longitude: point.lng,
+                        location: point.address || newReq.location,
                       })
                     }
                   />
                   <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
                     <MapPin size={12} className="text-pink-400" />
                     {Number.isFinite(newReq.latitude) && Number.isFinite(newReq.longitude)
-                      ? `${Number(newReq.latitude).toFixed(5)}, ${Number(newReq.longitude).toFixed(5)}`
+                      ? newReq.location || "Đang xác định địa chỉ..."
                       : "Nhấp vào bản đồ để chọn điểm gặp sự cố"}
                   </div>
                 </div>
