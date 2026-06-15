@@ -138,7 +138,7 @@ export function stopWatchLocation(watchId) {
 export async function reverseGeocode(latitude, longitude) {
   try {
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=vi`
     );
     const data = await response.json();
     return {
@@ -153,6 +153,102 @@ export async function reverseGeocode(latitude, longitude) {
       fullAddress: `${latitude}, ${longitude}`,
     };
   }
+}
+
+function normalizeVietnameseAddressPart(value) {
+  if (!value || typeof value !== "string") return "";
+  let text = value.trim().replace(/\s+/g, " ");
+
+  const suffixToPrefix = [
+    [/^(.+?)\s+Street$/i, "Đường $1"],
+    [/^(.+?)\s+Road$/i, "Đường $1"],
+    [/^(.+?)\s+Avenue$/i, "Đại lộ $1"],
+    [/^(.+?)\s+Boulevard$/i, "Đại lộ $1"],
+    [/^(.+?)\s+Lane$/i, "Ngõ $1"],
+    [/^(.+?)\s+Alley$/i, "Ngõ $1"],
+    [/^(.+?)\s+Ward$/i, "Phường $1"],
+    [/^(.+?)\s+Commune$/i, "Xã $1"],
+    [/^(.+?)\s+District$/i, "Quận $1"],
+    [/^(.+?)\s+County$/i, "Huyện $1"],
+    [/^(.+?)\s+City$/i, "Thành phố $1"],
+    [/^(.+?)\s+Province$/i, "Tỉnh $1"],
+  ];
+
+  for (const [pattern, replacement] of suffixToPrefix) {
+    if (pattern.test(text)) {
+      text = text.replace(pattern, replacement);
+      break;
+    }
+  }
+
+  return text
+    .replace(/\bStreet\b/gi, "Đường")
+    .replace(/\bRoad\b/gi, "Đường")
+    .replace(/\bAvenue\b/gi, "Đại lộ")
+    .replace(/\bBoulevard\b/gi, "Đại lộ")
+    .replace(/\bLane\b/gi, "Ngõ")
+    .replace(/\bAlley\b/gi, "Ngõ")
+    .replace(/\bWard\b/gi, "Phường")
+    .replace(/\bCommune\b/gi, "Xã")
+    .replace(/\bDistrict\b/gi, "Quận")
+    .replace(/\bCounty\b/gi, "Huyện")
+    .replace(/\bCity\b/gi, "Thành phố")
+    .replace(/\bProvince\b/gi, "Tỉnh")
+    .replace(/\bHamlet\b/gi, "Ấp")
+    .replace(/\bVillage\b/gi, "Làng")
+    .replace(/\bQuarter\b/gi, "Khu phố")
+    .replace(/\bProject\b/gi, "Dự án")
+    .replace(/\bBus Company\b/gi, "Công ty xe buýt")
+    .replace(/\bbus\b/gi, "buýt")
+    .replace(/\bwith\b/gi, "với")
+    .replace(/\bvớI\b/g, "với")
+    .replace(/\bAp\b/gi, "Ấp")
+    .replace(/\bHamlet\b/gi, "Ấp")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\bNguyen Van Tuyet\b/gi, "Nguyễn Văn Tuyết")
+    .replace(/\bThai Ha\b/gi, "Thái Hà")
+    .replace(/\bPhuong Mai\b/gi, "Phương Mai")
+    .replace(/\bKim Lien\b/gi, "Kim Liên")
+    .replace(/\bVinh Tuy\b/gi, "Vĩnh Tuy")
+    .replace(/\bMinh Khai\b/gi, "Minh Khai")
+    .replace(/\bHa Noi\b/gi, "Hà Nội")
+    .replace(/\bHanoi\b/gi, "Hà Nội")
+    .replace(/\bHo Chi Minh\b/gi, "Hồ Chí Minh")
+    .replace(/^(.+?)\s+Ấp$/i, "Ấp $1");
+}
+
+export function formatAdministrativeAddress(fullAddress, addressComponents) {
+  const seen = new Set();
+  const parts = [];
+  const push = (value) => {
+    if (!value || typeof value !== "string") return;
+    const normalized = normalizeVietnameseAddressPart(value);
+    if (!normalized || seen.has(normalized.toLowerCase())) return;
+    seen.add(normalized.toLowerCase());
+    parts.push(normalized);
+  };
+
+  if (addressComponents) {
+    push(addressComponents.road || addressComponents.pedestrian || addressComponents.footway);
+    push(addressComponents.neighbourhood || addressComponents.suburb || addressComponents.ward || addressComponents.village || addressComponents.town);
+    push(addressComponents.city_district || addressComponents.district || addressComponents.county);
+    push(addressComponents.city || addressComponents.state || addressComponents.province);
+  }
+
+  if (parts.length >= 2) return parts.join(", ");
+
+  if (typeof fullAddress === "string") {
+    fullAddress
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .filter((part) => !/^\d+$/.test(part) && !["Vietnam", "Việt Nam"].includes(part))
+      .slice(0, 4)
+      .forEach(push);
+  }
+
+  return parts.length > 0 ? parts.join(", ") : "Không thể lấy địa chỉ hành chính";
 }
 
 /**
@@ -203,6 +299,11 @@ export function calculateETA(distanceKm) {
  * @returns {string} - Địa chỉ định dạng gọn gàng
  */
 export function formatAddress(fullAddress, addressComponents) {
+  const administrativeAddress = formatAdministrativeAddress(fullAddress, addressComponents);
+  if (administrativeAddress && administrativeAddress !== "Không thể lấy địa chỉ hành chính") {
+    return administrativeAddress;
+  }
+
   // Nếu có address_components từ Nominatim, sử dụng nó để trích xuất
   if (addressComponents) {
     const village = addressComponents.village || addressComponents.neighbourhood;

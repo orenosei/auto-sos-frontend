@@ -211,11 +211,13 @@ export default function ProfileTab() {
                 <LocationPickerMap
                   lat={profileDraft.lat}
                   lng={profileDraft.lng}
+                  address={profileDraft.relative_address}
                   onPick={(point) =>
                     setProfileDraft((prev) => ({
                       ...prev,
                       lat: String(point.lat),
                       lng: String(point.lng),
+                      relative_address: point.address || prev.relative_address,
                     }))
                   }
                 />
@@ -223,7 +225,7 @@ export default function ProfileTab() {
                   <MapPin size={12} className={profileDraft.lat && profileDraft.lng ? "text-green-500" : "text-pink-500"} />
                   {profileDraft.lat && profileDraft.lng ? (
                     <span className="font-medium text-green-600">
-                      Đã chọn vị trí: {Number(profileDraft.lat).toFixed(5)}, {Number(profileDraft.lng).toFixed(5)}
+                      Đã chọn vị trí: {profileDraft.relative_address || "Đang xác định địa chỉ..."}
                     </span>
                   ) : (
                     "Chưa chọn vị trí"
