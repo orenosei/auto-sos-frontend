@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { AppContext } from "./internalAppContext";
 import { mockNotifications } from "../data/mockData";
-import { loginCompany, loginUser, registerCompany, registerUser } from "../api/auth";
+import { loginAccount, registerCompany, registerUser } from "../api/auth";
 import { toUiUser } from "../api/mappers";
 import { getNotifications, markNotificationRead } from "../api/notifications";
 
@@ -114,22 +114,9 @@ export function AppProvider({ children }) {
     });
   };
 
-  const login = async (role, identifier, password) => {
-    if (role === "company") {
-      const res = await loginCompany(identifier, password);
-      const ui = toUiUser("company", res.data);
-      setCurrentRoleState("company");
-      setCurrentUser(ui);
-      setIsLoggedIn(true);
-      localStorage.setItem(storageKey, JSON.stringify({ role: "company", user: ui }));
-      return;
-    }
-
-    const res = await loginUser(identifier, password);
-    if (role === "admin" && res.role !== "admin" && res.data?.user_role !== "admin") {
-      throw new Error("Tài khoản này không có quyền quản trị");
-    }
-    const effectiveRole = role === "admin" ? "admin" : "user";
+  const login = async (identifier, password) => {
+    const res = await loginAccount(identifier, password);
+    const effectiveRole = res.role === "company" ? "company" : "user";
     const ui = toUiUser(effectiveRole, res.data);
     setCurrentRoleState(effectiveRole);
     setCurrentUser(ui);

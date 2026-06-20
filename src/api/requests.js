@@ -2,6 +2,7 @@ import { apiRequest } from "./http";
 
 export async function getRequests(params = {}) {
   const search = new URLSearchParams();
+  if (params.all === true) search.set("all", "true");
   if (params.user_id != null) search.set("user_id", String(params.user_id));
   if (params.company_id != null) search.set("company_id", String(params.company_id));
   if (params.request_status != null) search.set("request_status", String(params.request_status));

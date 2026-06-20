@@ -16,6 +16,12 @@ function getReportTitle(item) {
   return "Bình luận cộng đồng";
 }
 
+const reportStatusLabel = {
+  pending: "Đang chờ",
+  reviewed: "Đã xử lý",
+  dismissed: "Đã bỏ qua",
+};
+
 export default function ContentTab() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -171,7 +177,7 @@ export default function ContentTab() {
                               : "bg-gray-100 text-gray-500"
                           }`}
                         >
-                          {item.status}
+                          {reportStatusLabel[item.status] ?? item.status}
                         </span>
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">
@@ -185,7 +191,7 @@ export default function ContentTab() {
                       <p className="text-xs text-gray-400 mt-1">{new Date(item.created_at).toLocaleString("vi-VN")}</p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  {item.status === "pending" ? <div className="flex gap-2">
                     <button
                       onClick={() => updateReport(item, "dismiss")}
                       disabled={busy}
@@ -202,7 +208,12 @@ export default function ContentTab() {
                       <XCircle size={13} />
                       Gỡ nội dung
                     </button>
-                  </div>
+                  </div> : (
+                    <div className="flex items-center gap-1 rounded-xl bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-500">
+                      <CheckCircle2 size={13} />
+                      {reportStatusLabel[item.status] ?? "Đã xử lý"}
+                    </div>
+                  )}
                 </div>
               </div>
             );
