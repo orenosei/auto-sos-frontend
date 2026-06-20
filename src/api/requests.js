@@ -19,6 +19,7 @@ export async function createRequest(input) {
     absolute_location: { lat: input.absolute_location.lat, lng: input.absolute_location.lng },
     relative_location: input.relative_location ?? null,
     request_description: input.request_description ?? null,
+    request_note: input.request_note ?? null,
     issue_type: input.issue_type ?? null,
     contact_name: input.contact_name ?? null,
     contact_phone: input.contact_phone ?? null,

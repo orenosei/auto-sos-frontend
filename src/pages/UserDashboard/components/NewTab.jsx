@@ -202,6 +202,18 @@ export default function NewTab() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Ghi chú cho đơn vị cứu hộ
+                  </label>
+                  <textarea
+                    placeholder="Ví dụ: Xe đang đỗ sát lề, vui lòng gọi trước khi đến..."
+                    value={newReq.note}
+                    onChange={(e) => setNewReq({ ...newReq, note: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 resize-none"
+                    rows={2}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Địa chỉ mô tả <span className="text-red-400">*</span>
                   </label>
                   <div className="relative">
@@ -305,6 +317,7 @@ export default function NewTab() {
                       setNewReq({
                         serviceType: "",
                         description: "",
+                        note: "",
                         location: "Đường Phạm Văn Đồng, Q. Bình Thạnh, TP.HCM",
                         latitude: undefined,
                         longitude: undefined,

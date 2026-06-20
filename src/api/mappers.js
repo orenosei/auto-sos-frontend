@@ -149,9 +149,20 @@ export function toUiRequest(r, lookup) {
   const point = parseGeoJsonPoint(r.absolute_location);
   const priceNumber = Number(lookup?.servicePrice ?? r.final_price);
   const estimatedArrival = r.estimated_arrival ? new Date(r.estimated_arrival) : null;
+  const acceptedAt = r.accepted_at ? new Date(r.accepted_at) : null;
   const etaMinutes =
     estimatedArrival && Number.isFinite(estimatedArrival.getTime())
       ? Math.max(0, Math.round((estimatedArrival.getTime() - Date.now()) / 60000))
+      : null;
+  const estimatedDuration =
+    estimatedArrival &&
+    acceptedAt &&
+    Number.isFinite(estimatedArrival.getTime()) &&
+    Number.isFinite(acceptedAt.getTime())
+      ? Math.max(
+          1,
+          Math.round((estimatedArrival.getTime() - acceptedAt.getTime()) / 60000)
+        )
       : null;
 
   return {
@@ -164,6 +175,7 @@ export function toUiRequest(r, lookup) {
     servicePrice: Number.isFinite(priceNumber) ? priceNumber : null,
     price: Number.isFinite(priceNumber) ? `${priceNumber.toLocaleString("vi-VN")}đ` : "",
     description: r.request_description ?? "",
+    note: r.request_note ?? "",
     issueType: r.issue_type ?? "",
     contactName: r.contact_name ?? "",
     contactPhone: r.contact_phone ?? "",
@@ -176,8 +188,12 @@ export function toUiRequest(r, lookup) {
     companyId: r.company_id != null ? String(r.company_id) : undefined,
     vehicleId: r.vehicle_id != null ? String(r.vehicle_id) : "",
     companyName: lookup?.companyName,
+    companyPhone: lookup?.companyPhone ?? "",
+    vehicleLicense: lookup?.vehicleLicense ?? "",
+    vehicleType: lookup?.vehicleType ?? "",
     estimatedArrival: r.estimated_arrival,
     estimatedTime: etaMinutes,
+    estimatedDuration,
     acceptedAt: r.accepted_at,
     headingAt: r.heading_at,
     arrivedAt: r.arrived_at,

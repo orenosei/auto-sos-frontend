@@ -1,6 +1,6 @@
 import React from 'react';
 import { useCompanyDashboard } from '../CompanyDashboardContext';
-import { Bell, CheckCircle2, Loader2, MapPin, MessageCircle, Phone, ChevronRight, XCircle, AlertTriangle } from "lucide-react";
+import { Bell, CheckCircle2, Loader2, MapPin, MessageCircle, Phone, ChevronRight, XCircle, AlertTriangle, Star } from "lucide-react";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -52,12 +52,18 @@ function RequestLocationMap({ request }) {
 export default function RequestsTab() {
   const context = useCompanyDashboard();
   const { 
-    selectedReq, setSelectedReq, filterStatus, setFilterStatus, loadingRequests, selectedVehicleId, setSelectedVehicleId, etaMinutes, setEtaMinutes, finalPrice, setFinalPrice, statusUpdating, vehicles, availableVehicles, filtered, handleStatusUpdate, openMessageModal, statusConfig
+    selectedReq, setSelectedReq, filterStatus, setFilterStatus, loadingRequests, selectedVehicleId, setSelectedVehicleId, etaMinutes, setEtaMinutes, finalPrice, setFinalPrice, statusUpdating, vehicles, availableVehicles, filtered, handleStatusUpdate, openMessageModal, statusConfig, companyReviews
   } = context;
   const isEmergencyRequest = (req) => ["emergency", "critical"].includes(req?.priority);
   const contactName = (req) => req.contactName || req.userName || "Chưa điền thông tin";
   const contactPhone = (req) => req.contactPhone || req.userPhone || "Chưa điền thông tin";
   const selectedContactPhone = selectedReq ? selectedReq.contactPhone || selectedReq.userPhone : "";
+  const reviewByRequestId = new Map(
+    companyReviews.map((review) => [String(review.request_id), review])
+  );
+  const selectedReview = selectedReq
+    ? reviewByRequestId.get(String(selectedReq.id))
+    : null;
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
@@ -96,6 +102,7 @@ export default function RequestsTab() {
               )}
               {filtered.map((req) => {
                 const status = statusConfig[req.status] ?? statusConfig.pending;
+                const requestReview = reviewByRequestId.get(String(req.id));
                 return (
                   <div
                     key={req.id}
@@ -138,6 +145,26 @@ export default function RequestsTab() {
                       </div>
                       <ChevronRight size={16} className="text-gray-300 shrink-0 mt-1" />
                     </div>
+                    {requestReview && (
+                      <div className="mt-3 flex items-center gap-2 rounded-xl border border-yellow-100 bg-yellow-50 px-3 py-2">
+                        <div className="flex gap-0.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              size={12}
+                              className={
+                                star <= Number(requestReview.review_rating)
+                                  ? "fill-yellow-400 text-yellow-400"
+                                  : "text-gray-200"
+                              }
+                            />
+                          ))}
+                        </div>
+                        <p className="truncate text-xs text-gray-600">
+                          {requestReview.review_comment || "Khách hàng không để lại nhận xét"}
+                        </p>
+                      </div>
+                    )}
                     <p className="text-xs text-gray-400 mt-2">{new Date(req.createdAt).toLocaleString("vi-VN")}</p>
                   </div>
                 );
@@ -185,6 +212,12 @@ export default function RequestsTab() {
                     <span className="text-gray-500">Mô tả</span>
                     <p className="text-gray-700 mt-0.5">{selectedReq.description}</p>
                   </div>
+                  {selectedReq.note && (
+                    <div className="rounded-xl border border-pink-100 bg-pink-50 p-3">
+                      <span className="text-xs font-semibold text-pink-700">Ghi chú của khách hàng</span>
+                      <p className="mt-1 text-gray-700">{selectedReq.note}</p>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-gray-500">Dịch vụ</span>
                     <span className="font-medium text-gray-800">{selectedReq.serviceType}</span>
@@ -221,6 +254,34 @@ export default function RequestsTab() {
                           </a>
                         ))}
                       </div>
+                    </div>
+                  )}
+                  {selectedReview && (
+                    <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-yellow-700">
+                          Đánh giá của khách hàng
+                        </span>
+                        <div className="flex gap-0.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              size={14}
+                              className={
+                                star <= Number(selectedReview.review_rating)
+                                  ? "fill-yellow-400 text-yellow-400"
+                                  : "text-gray-200"
+                              }
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <p className="mt-2 text-sm text-gray-700">
+                        {selectedReview.review_comment || "Khách hàng không để lại nhận xét."}
+                      </p>
+                      <p className="mt-1 text-[11px] text-gray-400">
+                        {new Date(selectedReview.reviewed_at).toLocaleString("vi-VN")}
+                      </p>
                     </div>
                   )}
                 </div>

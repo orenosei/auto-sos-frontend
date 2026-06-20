@@ -34,7 +34,8 @@ import { UserDashboardContext } from "./UserDashboardContext";
 import { useToast } from "../../components/ui/toastContext";
 import { toUiCompany, toUiRequest, toUiService } from "../../api/mappers";
 import { getRequestMessages, addRequestMessage, markMessageSeen } from "../../api/messages";
-import { addReview } from "../../api/reviews";
+import { addReview, deleteReview, updateReview } from "../../api/reviews";
+import { getVehicles } from "../../api/vehicles";
 import { updateUser } from "../../api/users";
 import { uploadFileToCloudinary } from "../../api/uploads";
 import { reverseGeocode, formatAddress, calculateDistance, calculateETA } from "../../utils/gpsUtils";
@@ -109,6 +110,7 @@ export default function UserDashboard() {
   const [newReq, setNewReq] = useState({
     serviceType: "",
     description: "",
+    note: "",
     location: "Đường Phạm Văn Đồng, Q. Bình Thạnh, TP.HCM",
     latitude: undefined,
     longitude: undefined,
@@ -195,13 +197,13 @@ export default function UserDashboard() {
 
   const activeRequest = userRequests.find((r) => activeStatuses.has(r.status));
 
-  const refreshRequests = async (companyNameById) => {
+  const refreshRequests = async (companyById, { silent = false } = {}) => {
     if (!userId) {
       setRequests([]);
       return;
     }
 
-    setLoadingRequests(true);
+    if (!silent) setLoadingRequests(true);
     try {
       const backend = await getRequests({ user_id: userId });
       const companyIds = [
@@ -227,6 +229,21 @@ export default function UserDashboard() {
       const reviewByRequestId = new Map(
         reviewRows.map((review) => [String(review.request_id), review])
       );
+      const vehicleRows = (
+        await Promise.all(
+          companyIds.map(async (companyId) => {
+            try {
+              return await getVehicles(companyId);
+            } catch (err) {
+              console.warn(err);
+              return [];
+            }
+          })
+        )
+      ).flat();
+      const vehicleById = new Map(
+        vehicleRows.map((vehicle) => [String(vehicle.vehicle_id), vehicle])
+      );
 
       const mapped = await Promise.all(
         backend.map(async (r) => {
@@ -248,16 +265,21 @@ export default function UserDashboard() {
             console.warn(err);
           }
 
-          const companyName =
-            r.company_id != null ? companyNameById?.get(String(r.company_id)) : undefined;
+          const company =
+            r.company_id != null ? companyById?.get(String(r.company_id)) : undefined;
+          const vehicle =
+            r.vehicle_id != null ? vehicleById.get(String(r.vehicle_id)) : undefined;
 
           return {
             ...toUiRequest(r, {
               userName: currentUser?.name ?? "",
               userPhone: currentUser?.phone ?? "",
-              companyName,
+              companyName: typeof company === "string" ? company : company?.name,
+              companyPhone: company?.phone ?? company?.company_phone ?? "",
               serviceType,
               servicePrice,
+              vehicleLicense: vehicle?.vehicle_license ?? "",
+              vehicleType: vehicle?.vehicle_type ?? "",
             }),
             imageUrls,
             rating: reviewByRequestId.has(String(r.request_id))
@@ -276,7 +298,7 @@ export default function UserDashboard() {
         return mapped.find((request) => request.id === prev.id) ?? prev;
       });
     } finally {
-      setLoadingRequests(false);
+      if (!silent) setLoadingRequests(false);
     }
   };
 
@@ -303,8 +325,8 @@ export default function UserDashboard() {
 
         if (cancelled) return;
         setCompanies(withServices);
-        const mapName = new Map(withServices.map((c) => [c.id, c.name]));
-        await refreshRequests(mapName);
+        const companyMap = new Map(withServices.map((c) => [c.id, c]));
+        await refreshRequests(companyMap);
       } catch (e) {
         console.error(e);
       }
@@ -315,6 +337,16 @@ export default function UserDashboard() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, isLoggedIn]);
+
+  useEffect(() => {
+    if (!userId || companies.length === 0) return undefined;
+    const companyMap = new Map(companies.map((company) => [company.id, company]));
+    const timer = window.setInterval(() => {
+      refreshRequests(companyMap, { silent: true }).catch((error) => console.warn(error));
+    }, 5000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, companies]);
 
   useEffect(() => {
     if (!preselectedCompanyId) return;
@@ -556,6 +588,7 @@ export default function UserDashboard() {
       absolute_location: { lat, lng },
       relative_location: newReq.location,
       request_description: newReq.description,
+      request_note: newReq.note,
       issue_type: newReq.serviceType,
       priority: "normal",
       service_id: Number.isFinite(serviceId) ? serviceId : null,
@@ -589,8 +622,8 @@ export default function UserDashboard() {
       }
     }
 
-    const mapName = new Map(companies.map((c) => [c.id, c.name]));
-    await refreshRequests(mapName);
+    const companyMap = new Map(companies.map((c) => [c.id, c]));
+    await refreshRequests(companyMap);
   };
 
   const cancelRequest = async (request) => {
@@ -602,8 +635,8 @@ export default function UserDashboard() {
         changed_by: "user",
         note: reason || "User cancelled request",
       });
-      const mapName = new Map(companies.map((c) => [c.id, c.name]));
-      await refreshRequests(mapName);
+      const companyMap = new Map(companies.map((c) => [c.id, c]));
+      await refreshRequests(companyMap);
       setSelectedRequest((prev) => (prev?.id === request.id ? { ...prev, status: "cancelled" } : prev));
     } catch (e) {
       console.error(e);
@@ -631,21 +664,21 @@ export default function UserDashboard() {
 
   const handleRatingSubmit = async () => {
     const currentRequest = requests.find((request) => request.id === ratingModal.requestId);
-    if (currentRequest?.reviewId || currentRequest?.rating) {
-      window.alert("Yêu cầu này đã được đánh giá trước đó.");
-      setRatingModal({ open: false, requestId: "" });
-      return;
-    }
     if (!starValue) {
       window.alert("Vui lòng chọn số sao đánh giá.");
       return;
     }
 
     try {
-      await addReview(ratingModal.requestId, {
+      const payload = {
         review_rating: starValue,
         review_comment: ratingText,
-      });
+      };
+      if (currentRequest?.reviewId || currentRequest?.rating) {
+        await updateReview(ratingModal.requestId, payload);
+      } else {
+        await addReview(ratingModal.requestId, payload);
+      }
     } catch (e) {
       console.error(e);
       window.alert(e instanceof Error ? e.message : "Gửi đánh giá thất bại");
@@ -656,12 +689,30 @@ export default function UserDashboard() {
     setStarValue(0);
     setRatingText("");
 
-    const mapName = new Map(companies.map((c) => [c.id, c.name]));
-    await refreshRequests(mapName);
+    const companyMap = new Map(companies.map((c) => [c.id, c]));
+    await refreshRequests(companyMap);
+  };
+
+  const openRatingModal = (request) => {
+    setStarValue(Number(request?.rating) || 0);
+    setRatingText(request?.review ?? "");
+    setRatingModal({ open: true, requestId: request?.id ?? "" });
+  };
+
+  const handleDeleteReview = async (request) => {
+    if (!request?.id || !window.confirm("Bạn có chắc muốn xóa đánh giá này?")) return;
+    try {
+      await deleteReview(request.id);
+      const companyMap = new Map(companies.map((c) => [c.id, c]));
+      await refreshRequests(companyMap);
+    } catch (error) {
+      console.error(error);
+      window.alert(error instanceof Error ? error.message : "Xóa đánh giá thất bại");
+    }
   };
 
   const contextValue = {
-    currentUser, isLoggedIn, locationState, preselectedCompanyId, preselectedLat, preselectedLng, preselectedAddress, userId, services, setServices, companies, setCompanies, requests, setRequests, setLoadingRequests, activeTab, setActiveTab, selectedRequest, setSelectedRequest, newReq, setNewReq, ratingModal, setRatingModal, companyReviewModal, setCompanyReviewModal, openCompanyReviews, starValue, setStarValue, ratingText, setRatingText, messageOpen, setMessageOpen, messages, setMessages, messageInput, setMessageInput, messageTimerRef, sendingMessage, setSendingMessage, submittingRequest, setSubmittingRequest, gpsLoading, setGpsLoading, imageUploading, setImageUploading, imageInputRef, hasAutoGpsTriedRef, toast, refreshRequests, openMessageModal, closeMessageModal, requestServiceByName, availableRequestServices, selectedCompany, selectedCompanyService, companiesWithDistance, getGpsLocation, handleImageSelection, removeUploadedImage, handleRatingSubmit, submitRequest, cancelRequest, statusConfig, serviceIconMap, formatAddress, calculateDistance, calculateETA
+    currentUser, isLoggedIn, locationState, preselectedCompanyId, preselectedLat, preselectedLng, preselectedAddress, userId, services, setServices, companies, setCompanies, requests, setRequests, setLoadingRequests, activeTab, setActiveTab, selectedRequest, setSelectedRequest, newReq, setNewReq, ratingModal, setRatingModal, companyReviewModal, setCompanyReviewModal, openCompanyReviews, starValue, setStarValue, ratingText, setRatingText, messageOpen, setMessageOpen, messages, setMessages, messageInput, setMessageInput, messageTimerRef, sendingMessage, setSendingMessage, submittingRequest, setSubmittingRequest, gpsLoading, setGpsLoading, imageUploading, setImageUploading, imageInputRef, hasAutoGpsTriedRef, toast, refreshRequests, openMessageModal, closeMessageModal, requestServiceByName, availableRequestServices, selectedCompany, selectedCompanyService, companiesWithDistance, getGpsLocation, handleImageSelection, removeUploadedImage, handleRatingSubmit, openRatingModal, handleDeleteReview, submitRequest, cancelRequest, statusConfig, serviceIconMap, formatAddress, calculateDistance, calculateETA
   };
 
   return (
@@ -809,7 +860,11 @@ export default function UserDashboard() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-gray-900">Đánh giá dịch vụ</h3>
+              <h3 className="font-bold text-gray-900">
+                {requests.find((request) => request.id === ratingModal.requestId)?.reviewId
+                  ? "Sửa đánh giá"
+                  : "Đánh giá dịch vụ"}
+              </h3>
               <button onClick={() => setRatingModal({ open: false, requestId: "" })} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
@@ -832,7 +887,9 @@ export default function UserDashboard() {
               onClick={handleRatingSubmit}
               className="mt-4 w-full bg-linear-to-r from-pink-500 to-pink-400 text-white py-3 rounded-xl font-semibold hover:shadow-md transition-all"
             >
-              Gửi đánh giá
+              {requests.find((request) => request.id === ratingModal.requestId)?.reviewId
+                ? "Lưu đánh giá"
+                : "Gửi đánh giá"}
             </button>
           </div>
         </div>

@@ -1,23 +1,19 @@
 import React, { useMemo, useState } from 'react';
 import { useUserDashboard } from '../UserDashboardContext';
-import { MapPin, CheckCircle2, XCircle, Star, Phone, MessageCircle, ChevronRight, Car, Wrench, Navigation } from "lucide-react";
+import { MapPin, CheckCircle2, XCircle, Star, Phone, MessageCircle, Car, Wrench, Navigation, Pencil, Trash2, Clock } from "lucide-react";
 
 export default function TrackTab() {
   const context = useUserDashboard();
   const { 
-    requests, selectedRequest, setSelectedRequest, openMessageModal, cancelRequest, statusConfig
+    requests, selectedRequest, setSelectedRequest, openMessageModal, cancelRequest, statusConfig, openRatingModal, handleDeleteReview
   } = context;
   const userRequests = requests;
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 4;
-  const activeRequests = useMemo(
-    () => userRequests.filter((r) => r.status !== "completed" && r.status !== "cancelled"),
-    [userRequests]
-  );
   const filteredRequests = useMemo(
-    () => activeRequests.filter((r) => statusFilter === "all" || r.status === statusFilter),
-    [activeRequests, statusFilter]
+    () => userRequests.filter((r) => statusFilter === "all" || r.status === statusFilter),
+    [userRequests, statusFilter]
   );
   const totalPages = Math.max(1, Math.ceil(filteredRequests.length / itemsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -46,13 +42,15 @@ export default function TrackTab() {
                 <option value="heading">Đang di chuyển</option>
                 <option value="arrived">Đã đến nơi</option>
                 <option value="processing">Đang xử lý</option>
+                <option value="completed">Hoàn tất</option>
+                <option value="cancelled">Đã hủy</option>
               </select>
             </div>
             <div className="space-y-3">
-              {activeRequests.length === 0 ? (
+              {userRequests.length === 0 ? (
                 <div className="text-center py-10 bg-white rounded-2xl border border-pink-100">
                   <CheckCircle2 size={40} className="text-green-300 mx-auto mb-3" />
-                  <p className="text-gray-400 text-sm">Không có yêu cầu nào đang xử lý</p>
+                  <p className="text-gray-400 text-sm">Bạn chưa có yêu cầu nào</p>
                 </div>
               ) : (
                 filteredRequests.length === 0 ? (
@@ -128,7 +126,16 @@ export default function TrackTab() {
                   {[
                     { label: "Gửi yêu cầu", done: true, time: new Date(selectedRequest.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) },
                     { label: "Tiếp nhận bởi " + (selectedRequest.companyName || "..."), done: selectedRequest.status !== "pending", time: selectedRequest.acceptedAt ? new Date(selectedRequest.acceptedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "" },
-                    { label: "Xe cứu hộ đang đến", done: ["heading", "arrived", "processing", "completed"].includes(selectedRequest.status), time: selectedRequest.estimatedTime != null ? `~${selectedRequest.estimatedTime} phút` : "" },
+                    {
+                      label: "Xe cứu hộ đang đến",
+                      done: ["heading", "arrived", "processing", "completed"].includes(selectedRequest.status),
+                      time:
+                        selectedRequest.estimatedDuration != null
+                          ? `Dự kiến ${selectedRequest.estimatedDuration} phút`
+                          : selectedRequest.estimatedArrival
+                            ? `Dự kiến lúc ${new Date(selectedRequest.estimatedArrival).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`
+                            : "",
+                    },
                     { label: "Đã đến hiện trường", done: ["arrived", "processing", "completed"].includes(selectedRequest.status), time: selectedRequest.arrivedAt ? new Date(selectedRequest.arrivedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "" },
                     { label: "Đang xử lý sự cố", done: ["processing", "completed"].includes(selectedRequest.status), time: "" },
                     { label: "Hoàn tất dịch vụ", done: selectedRequest.status === "completed", time: selectedRequest.status === "completed" ? new Date(selectedRequest.updatedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "" },
@@ -154,6 +161,38 @@ export default function TrackTab() {
                     <Wrench size={14} className="text-pink-400 mt-0.5 shrink-0" />
                     <span className="text-gray-600">{selectedRequest.serviceType}</span>
                   </div>
+                  {selectedRequest.note && (
+                    <div className="rounded-xl border border-pink-100 bg-pink-50 p-3">
+                      <p className="text-xs font-semibold text-pink-700">Ghi chú</p>
+                      <p className="mt-1 text-sm text-gray-700">{selectedRequest.note}</p>
+                    </div>
+                  )}
+                  {selectedRequest.status === "pending" && (
+                    <div className="flex gap-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-yellow-700">
+                      <Clock size={15} className="mt-0.5 shrink-0" />
+                      <span className="text-xs">
+                        Yêu cầu sẽ tự động hủy nếu chưa được tiếp nhận trước{" "}
+                        {new Date(new Date(selectedRequest.createdAt).getTime() + 30 * 60 * 1000).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}.
+                      </span>
+                    </div>
+                  )}
+                  {selectedRequest.vehicleId && (
+                    <div className="flex gap-2">
+                      <Car size={14} className="text-pink-400 mt-0.5 shrink-0" />
+                      <span className="text-gray-600">
+                        {selectedRequest.vehicleLicense || `Phương tiện #${selectedRequest.vehicleId}`}
+                        {selectedRequest.vehicleType ? ` · ${selectedRequest.vehicleType}` : ""}
+                      </span>
+                    </div>
+                  )}
+                  {selectedRequest.estimatedArrival && (
+                    <div className="flex gap-2">
+                      <Clock size={14} className="text-pink-400 mt-0.5 shrink-0" />
+                      <span className="text-gray-600">
+                        Dự kiến đến lúc {new Date(selectedRequest.estimatedArrival).toLocaleString("vi-VN")}
+                      </span>
+                    </div>
+                  )}
                   {selectedRequest.price && (
                     <div className="flex gap-2">
                       <span className="text-xs text-gray-400">💰</span>
@@ -194,7 +233,31 @@ export default function TrackTab() {
                       ))}
                     </div>
                     <p className="text-xs text-gray-600 italic">"{selectedRequest.review}"</p>
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        onClick={() => openRatingModal(selectedRequest)}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-pink-600"
+                      >
+                        <Pencil size={12} /> Sửa
+                      </button>
+                      <button
+                        onClick={() => handleDeleteReview(selectedRequest)}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-red-500"
+                      >
+                        <Trash2 size={12} /> Xóa
+                      </button>
+                    </div>
                   </div>
+                )}
+
+                {selectedRequest.status === "completed" && !selectedRequest.rating && (
+                  <button
+                    onClick={() => openRatingModal(selectedRequest)}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-yellow-400 to-orange-400 py-2.5 text-sm font-semibold text-white transition-all hover:shadow-md hover:shadow-yellow-100"
+                  >
+                    <Star size={16} />
+                    Đánh giá dịch vụ
+                  </button>
                 )}
 
                 {/* Actions */}
@@ -204,10 +267,19 @@ export default function TrackTab() {
                       <MessageCircle size={16} />
                       Nhắn tin
                     </button>
-                    <button className="flex-1 flex items-center justify-center gap-2 bg-pink-50 text-pink-600 py-2.5 rounded-xl text-sm font-medium hover:bg-pink-100 transition-colors">
+                    <a
+                      href={selectedRequest.companyPhone ? `tel:${selectedRequest.companyPhone}` : undefined}
+                      onClick={(event) => {
+                        if (!selectedRequest.companyPhone) {
+                          event.preventDefault();
+                          window.alert("Đơn vị cứu hộ chưa cập nhật số điện thoại.");
+                        }
+                      }}
+                      className="flex-1 flex items-center justify-center gap-2 bg-pink-50 text-pink-600 py-2.5 rounded-xl text-sm font-medium hover:bg-pink-100 transition-colors"
+                    >
                       <Phone size={16} />
                       Gọi điện
-                    </button>
+                    </a>
                     {selectedRequest.status === "pending" && (
                       <button
                         onClick={() => cancelRequest(selectedRequest)}

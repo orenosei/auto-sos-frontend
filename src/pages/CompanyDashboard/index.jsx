@@ -42,6 +42,7 @@ import StatsTab from './components/StatsTab';
 import ServicesTab from './components/ServicesTab';
 import VehiclesTab from './components/VehiclesTab';
 import ProfileTab from './components/ProfileTab';
+import ReviewsTab from './components/ReviewsTab';
 import { CompanyDashboardContext } from "./CompanyDashboardContext";
 import { useToast } from "../../components/ui/toastContext";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -123,6 +124,7 @@ export default function CompanyDashboard() {
   const toast = useToast();
   const [vehicles, setVehicles] = useState([]);
   const [ratingSummary, setRatingSummary] = useState({ average: null, count: 0 });
+  const [companyReviews, setCompanyReviews] = useState([]);
   const [satisfactionRate, setSatisfactionRate] = useState(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
   const [etaMinutes, setEtaMinutes] = useState("20");
@@ -235,13 +237,13 @@ export default function CompanyDashboard() {
     (r) => filterStatus === "all" || r.status === filterStatus
   );
 
-  const refreshRequests = async () => {
+  const refreshRequests = async ({ silent = false } = {}) => {
     if (!companyId) {
       setRequests([]);
       return;
     }
 
-    setLoadingRequests(true);
+    if (!silent) setLoadingRequests(true);
     try {
       const backend = await getRequests({ company_id: companyId });
 
@@ -298,7 +300,7 @@ export default function CompanyDashboard() {
         return mapped.find((x) => x.id === prev.id) ?? null;
       });
     } finally {
-      setLoadingRequests(false);
+      if (!silent) setLoadingRequests(false);
     }
   };
 
@@ -367,6 +369,7 @@ export default function CompanyDashboard() {
                 const r = await getCompanyReviews(companyId);
                 if (!cancelled && Array.isArray(r)) {
                   const rows = r;
+                  setCompanyReviews(rows);
                   const satisfied = rows.filter((x) => Number(x.review_rating) >= 4).length;
                   const rate = rows.length > 0 ? Math.round((satisfied / rows.length) * 100) : null;
                   setSatisfactionRate(rate);
@@ -382,6 +385,7 @@ export default function CompanyDashboard() {
               const rev = await getCompanyReviews(companyId);
               if (!cancelled && Array.isArray(rev)) {
                 const rows = rev;
+                setCompanyReviews(rows);
                 const satisfied = rows.filter((x) => Number(x.review_rating) >= 4).length;
                 const rate = rows.length > 0 ? Math.round((satisfied / rows.length) * 100) : null;
                 setSatisfactionRate(rate);
@@ -401,6 +405,30 @@ export default function CompanyDashboard() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, isLoggedIn]);
+
+  useEffect(() => {
+    if (!companyId || !isLoggedIn) return undefined;
+    const timer = window.setInterval(() => {
+      refreshRequests({ silent: true }).catch((error) => console.warn(error));
+      getCompanyReviews(companyId)
+        .then((rows) => {
+          if (!Array.isArray(rows)) return;
+          setCompanyReviews(rows);
+          const average = rows.length
+            ? rows.reduce((sum, review) => sum + Number(review.review_rating || 0), 0) / rows.length
+            : null;
+          setRatingSummary({ average, count: rows.length });
+          setSatisfactionRate(
+            rows.length
+              ? Math.round((rows.filter((review) => Number(review.review_rating) >= 4).length / rows.length) * 100)
+              : null
+          );
+        })
+        .catch((error) => console.warn(error));
+    }, 5000);
+    return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, isLoggedIn]);
 
@@ -684,13 +712,14 @@ export default function CompanyDashboard() {
   const tabs = [
     { key: "requests", label: "Yêu cầu", icon: <Bell size={16} /> },
     { key: "stats", label: "Thống kê", icon: <TrendingUp size={16} /> },
+    { key: "reviews", label: "Đánh giá", icon: <Star size={16} /> },
     { key: "services", label: "Dịch vụ", icon: <Wrench size={16} /> },
     { key: "vehicles", label: "Phương tiện", icon: <Car size={16} /> },
     { key: "profile", label: "Hồ sơ công ty", icon: <Award size={16} /> },
   ];
 
   const contextValue = {
-    currentUser, isLoggedIn, updateCurrentUser, companyId, activeTab, setActiveTab, selectedReq, setSelectedReq, filterStatus, setFilterStatus, companyName, setCompanyName, companyProfile, setCompanyProfile, profileDraft, setProfileDraft, editingProfile, setEditingProfile, savingProfile, setSavingProfile, companyServices, setCompanyServices, allServices, setAllServices, addingServiceOpen, setAddingServiceOpen, addingService, setAddingService, newServiceId, setNewServiceId, newServicePrice, setNewServicePrice, editingServiceId, setEditingServiceId, editingServicePrice, setEditingServicePrice, savingService, setSavingService, requests, setRequests, chartData, loadingRequests, setLoadingRequests, messageOpen, setMessageOpen, messages, setMessages, messageInput, setMessageInput, messageTimerRef, sendingMessage, setSendingMessage, statusUpdating, setStatusUpdating, toast, vehicles, setVehicles, ratingSummary, setRatingSummary, satisfactionRate, setSatisfactionRate, selectedVehicleId, setSelectedVehicleId, etaMinutes, setEtaMinutes, finalPrice, setFinalPrice, vehicleFormOpen, setVehicleFormOpen, editingVehicleId, setEditingVehicleId, savingVehicle, setSavingVehicle, vehicleDraft, setVehicleDraft, parseGeoJsonPoint, companyStats, formatRevenue, companyRequests, filtered, refreshRequests, handleStatusUpdate, availableVehicles, formatVnd, availableServices, handleAddService, startEditService, cancelEditService, handleSaveServicePrice, handleDeleteService, resetVehicleDraft, startEditVehicle, handleSaveVehicle, handleDeleteVehicle, openMessageModal, closeMessageModal, statusConfig
+    currentUser, isLoggedIn, updateCurrentUser, companyId, activeTab, setActiveTab, selectedReq, setSelectedReq, filterStatus, setFilterStatus, companyName, setCompanyName, companyProfile, setCompanyProfile, profileDraft, setProfileDraft, editingProfile, setEditingProfile, savingProfile, setSavingProfile, companyServices, setCompanyServices, allServices, setAllServices, addingServiceOpen, setAddingServiceOpen, addingService, setAddingService, newServiceId, setNewServiceId, newServicePrice, setNewServicePrice, editingServiceId, setEditingServiceId, editingServicePrice, setEditingServicePrice, savingService, setSavingService, requests, setRequests, chartData, loadingRequests, setLoadingRequests, messageOpen, setMessageOpen, messages, setMessages, messageInput, setMessageInput, messageTimerRef, sendingMessage, setSendingMessage, statusUpdating, setStatusUpdating, toast, vehicles, setVehicles, ratingSummary, setRatingSummary, companyReviews, setCompanyReviews, satisfactionRate, setSatisfactionRate, selectedVehicleId, setSelectedVehicleId, etaMinutes, setEtaMinutes, finalPrice, setFinalPrice, vehicleFormOpen, setVehicleFormOpen, editingVehicleId, setEditingVehicleId, savingVehicle, setSavingVehicle, vehicleDraft, setVehicleDraft, parseGeoJsonPoint, companyStats, formatRevenue, companyRequests, filtered, refreshRequests, handleStatusUpdate, availableVehicles, formatVnd, availableServices, handleAddService, startEditService, cancelEditService, handleSaveServicePrice, handleDeleteService, resetVehicleDraft, startEditVehicle, handleSaveVehicle, handleDeleteVehicle, openMessageModal, closeMessageModal, statusConfig
   };
 
   return (
@@ -877,6 +906,9 @@ export default function CompanyDashboard() {
 
       {/* Tab: Stats */}
       {activeTab === "stats" && <StatsTab />}
+
+      {/* Tab: Reviews */}
+      {activeTab === "reviews" && <ReviewsTab />}
 
       {/* Tab: Services */}
       {activeTab === "services" && <ServicesTab />}

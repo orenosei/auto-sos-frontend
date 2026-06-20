@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useUserDashboard } from '../UserDashboardContext';
-import { Car, Wrench, MapPin, CheckCircle2, Star, ChevronRight } from "lucide-react";
+import { Car, Wrench, MapPin, Star, ChevronRight, Pencil, Trash2 } from "lucide-react";
 
 export default function RequestsTab() {
   const context = useUserDashboard();
   const { 
-    requests, setActiveTab, setSelectedRequest, setRatingModal, statusConfig, serviceIconMap
+    requests, setActiveTab, setSelectedRequest, openRatingModal, handleDeleteReview, statusConfig, serviceIconMap
   } = context;
   const userRequests = requests;
   const [statusFilter, setStatusFilter] = useState("all");
@@ -148,15 +148,37 @@ export default function RequestsTab() {
                       </div>
                       <div className="flex items-center gap-2">
                         {req.rating ? (
-                          <div className="flex items-center gap-1">
-                            {[1, 2, 3, 4, 5].map((s) => (
-                              <Star key={s} size={12} className={s <= req.rating ? "fill-yellow-400 text-yellow-400" : "text-gray-200"} />
-                            ))}
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star key={s} size={12} className={s <= req.rating ? "fill-yellow-400 text-yellow-400" : "text-gray-200"} />
+                              ))}
+                            </div>
+                            <button
+                              title="Sửa đánh giá"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openRatingModal(req);
+                              }}
+                              className="text-pink-500 hover:text-pink-700"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              title="Xóa đánh giá"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteReview(req);
+                              }}
+                              className="text-red-400 hover:text-red-600"
+                            >
+                              <Trash2 size={13} />
+                            </button>
                           </div>
                         ) : req.status === "completed" ? (
                           <button
                             className="text-xs text-pink-600 font-medium hover:text-pink-700"
-                            onClick={(e) => { e.stopPropagation(); setRatingModal({ open: true, requestId: req.id }); }}
+                            onClick={(e) => { e.stopPropagation(); openRatingModal(req); }}
                           >
                             Đánh giá dịch vụ
                           </button>
