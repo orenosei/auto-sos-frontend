@@ -133,6 +133,11 @@ export default function RequestsTab() {
                               Ưu tiên cao
                             </span>
                           )}
+                          {req.assignmentMode === "automatic" && (
+                            <span className="rounded-full border border-pink-200 bg-pink-50 px-2 py-0.5 text-xs font-semibold text-pink-600">
+                              Hệ thống phân công
+                            </span>
+                          )}
                           <h3 className="font-semibold text-gray-800 text-sm">{req.serviceType}</h3>
                         </div>
                         <p className="text-sm text-gray-600 mt-1">{contactName(req)} · {contactPhone(req)}</p>
@@ -184,6 +189,11 @@ export default function RequestsTab() {
                       {(statusConfig[selectedReq.status] ?? statusConfig.pending).label}
                     </span>
                   </div>
+                  {selectedReq.assignmentMode === "automatic" && (
+                    <div className="rounded-xl border border-pink-100 bg-pink-50 px-3 py-2 text-xs font-semibold text-pink-600">
+                      Yêu cầu được hệ thống tự động phân công
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-gray-500">Khách hàng</span>
                     <span className="font-medium text-gray-800">{contactName(selectedReq)}</span>

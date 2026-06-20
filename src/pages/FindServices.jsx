@@ -14,6 +14,7 @@ import {
   Loader,
   AlertCircle,
   X,
+  Sparkles,
 } from "lucide-react";
 import { getCompanies, getCompanyReviews, getNearbyCompanies } from "../api/companies";
 import { getServices } from "../api/services";
@@ -78,7 +79,9 @@ export default function FindServices() {
         setServices(svc.map(toUiService));
 
         // Backend now returns services bundled per company as `services`.
-        const withServices = comps.map((c) => toUiCompany(c, c.services || []));
+        const withServices = comps
+          .map((c) => toUiCompany(c, c.services || []))
+          .filter((company) => company.verified && company.services.length > 0);
 
         if (!cancelled) setCompanies(withServices);
       } catch (e) {
@@ -279,8 +282,25 @@ export default function FindServices() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Tìm dịch vụ cứu hộ</h1>
-        <p className="text-gray-500">Danh sách các đơn vị cứu hộ xe uy tín gần bạn</p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Tìm dịch vụ cứu hộ</h1>
+            <p className="text-gray-500">Danh sách các đơn vị cứu hộ xe uy tín gần bạn</p>
+          </div>
+          <Link
+            to="/dashboard"
+            state={{
+              assignmentMode: "automatic",
+              preselectedLat: location?.latitude,
+              preselectedLng: location?.longitude,
+              preselectedAddress: displayAddress,
+            }}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-pink-500 to-pink-400 px-5 py-3 text-sm font-semibold text-white transition-all hover:shadow-md hover:shadow-pink-200"
+          >
+            <Sparkles size={17} />
+            Tự động tìm dịch vụ
+          </Link>
+        </div>
       </div>
 
       {/* Search & Filter bar */}

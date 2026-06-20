@@ -176,6 +176,7 @@ export function toUiRequest(r, lookup) {
     price: Number.isFinite(priceNumber) ? `${priceNumber.toLocaleString("vi-VN")}đ` : "",
     description: r.request_description ?? "",
     note: r.request_note ?? "",
+    assignmentMode: r.assignment_mode ?? "manual",
     issueType: r.issue_type ?? "",
     contactName: r.contact_name ?? "",
     contactPhone: r.contact_phone ?? "",

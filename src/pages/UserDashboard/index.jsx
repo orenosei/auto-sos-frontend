@@ -23,7 +23,7 @@ import {
   Send,
 } from "lucide-react";
 import { useApp } from "../../context/useApp";
-import { getCompanies, getCompanyReviews, getCompanyServices, getNearbyCompanies } from "../../api/companies";
+import { getCompanies, getCompanyReviews, getCompanyServices, getNearbyCompanies, recommendCompany } from "../../api/companies";
 import { getServices } from "../../api/services";
 import { createRequest, getRequestServices, getRequests, updateRequestStatus } from "../../api/requests";
 import { addRequestImage, getRequestImages, uploadRequestImageToCloudinary } from "../../api/requestImages";
@@ -93,6 +93,9 @@ export default function UserDashboard() {
     return typeof value === "string" && value.trim() ? value : undefined;
   }, [locationState.state]);
 
+  const preselectedAssignmentMode =
+    locationState.state?.assignmentMode === "automatic" ? "automatic" : "manual";
+
   const userId = useMemo(() => {
     if (!currentUser) return null;
     if (currentUser.role !== "user" && currentUser.role !== "admin") return null;
@@ -102,6 +105,7 @@ export default function UserDashboard() {
 
   const [services, setServices] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const companyDirectoryRef = useRef(new Map());
   const [requests, setRequests] = useState([]);
   const [, setLoadingRequests] = useState(false);
 
@@ -116,6 +120,7 @@ export default function UserDashboard() {
     longitude: undefined,
     step: 1,
     selectedCompanyId: preselectedCompanyId,
+    assignmentMode: preselectedCompanyId ? "manual" : preselectedAssignmentMode,
     imageUrls: [],
   });
   const [ratingModal, setRatingModal] = useState({ open: false, requestId: "" });
@@ -270,12 +275,21 @@ export default function UserDashboard() {
           const vehicle =
             r.vehicle_id != null ? vehicleById.get(String(r.vehicle_id)) : undefined;
 
+          const canRevealCompany =
+            r.assignment_mode !== "automatic" || r.request_status !== "pending";
+
           return {
             ...toUiRequest(r, {
               userName: currentUser?.name ?? "",
               userPhone: currentUser?.phone ?? "",
-              companyName: typeof company === "string" ? company : company?.name,
-              companyPhone: company?.phone ?? company?.company_phone ?? "",
+              companyName: canRevealCompany
+                ? typeof company === "string"
+                  ? company
+                  : company?.name
+                : "",
+              companyPhone: canRevealCompany
+                ? company?.phone ?? company?.company_phone ?? ""
+                : "",
               serviceType,
               servicePrice,
               vehicleLicense: vehicle?.vehicle_license ?? "",
@@ -322,11 +336,16 @@ export default function UserDashboard() {
             }
           })
         );
+        const eligibleCompanies = withServices.filter(
+          (company) => company.verified && company.serviceDetails.length > 0
+        );
 
         if (cancelled) return;
-        setCompanies(withServices);
-        const companyMap = new Map(withServices.map((c) => [c.id, c]));
-        await refreshRequests(companyMap);
+        companyDirectoryRef.current = new Map(
+          withServices.map((company) => [company.id, company])
+        );
+        setCompanies(eligibleCompanies);
+        await refreshRequests(companyDirectoryRef.current);
       } catch (e) {
         console.error(e);
       }
@@ -340,27 +359,36 @@ export default function UserDashboard() {
 
   useEffect(() => {
     if (!userId || companies.length === 0) return undefined;
-    const companyMap = new Map(companies.map((company) => [company.id, company]));
     const timer = window.setInterval(() => {
-      refreshRequests(companyMap, { silent: true }).catch((error) => console.warn(error));
+      refreshRequests(companyDirectoryRef.current, { silent: true }).catch((error) =>
+        console.warn(error)
+      );
     }, 5000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, companies]);
 
   useEffect(() => {
-    if (!preselectedCompanyId) return;
+    if (!preselectedCompanyId && preselectedAssignmentMode !== "automatic") return;
 
     setActiveTab("new");
     setNewReq((prev) => ({
       ...prev,
-      selectedCompanyId: preselectedCompanyId,
+      selectedCompanyId:
+        preselectedAssignmentMode === "automatic" ? "" : preselectedCompanyId,
+      assignmentMode: preselectedAssignmentMode,
       latitude: preselectedLat ?? prev.latitude,
       longitude: preselectedLng ?? prev.longitude,
       location: preselectedAddress ?? prev.location,
       step: 1,
     }));
-  }, [preselectedCompanyId, preselectedLat, preselectedLng, preselectedAddress]);
+  }, [
+    preselectedCompanyId,
+    preselectedLat,
+    preselectedLng,
+    preselectedAddress,
+    preselectedAssignmentMode,
+  ]);
 
   useEffect(() => {
     if (!newReq.selectedCompanyId || typeof window === "undefined") return;
@@ -427,10 +455,11 @@ export default function UserDashboard() {
   }, [selectedCompany, newReq.serviceType]);
 
   const availableRequestServices = useMemo(() => {
+    if (newReq.assignmentMode === "automatic") return services;
     const names = new Set((selectedCompany?.serviceDetails ?? []).map((s) => s.name));
     if (names.size === 0) return [];
     return services.filter((s) => names.has(s.name));
-  }, [selectedCompany, services]);
+  }, [newReq.assignmentMode, selectedCompany, services]);
 
   const { latitude, longitude, selectedCompanyId } = newReq;
 
@@ -573,15 +602,34 @@ export default function UserDashboard() {
     }
 
     if (lat == null || lng == null) {
+      setSubmittingRequest(false);
       return;
     }
 
-    const companyId = newReq.selectedCompanyId ? Number(newReq.selectedCompanyId) : null;
     const pickedService = requestServiceByName.get(newReq.serviceType);
     const serviceId = pickedService ? Number(pickedService.id) : null;
+    let companyId = newReq.selectedCompanyId ? Number(newReq.selectedCompanyId) : null;
+    let lockedServicePrice =
+      selectedCompanyService && Number.isFinite(selectedCompanyService.price)
+        ? selectedCompanyService.price
+        : null;
 
     let created;
     try {
+      if (!Number.isFinite(serviceId)) {
+        throw new Error("Vui lòng chọn dịch vụ cứu hộ");
+      }
+
+      if (newReq.assignmentMode === "automatic") {
+        const recommendation = await recommendCompany({
+          latitude: lat,
+          longitude: lng,
+          service_id: serviceId,
+        });
+        companyId = Number(recommendation.company_id);
+        lockedServicePrice = Number(recommendation.service_price);
+      }
+
       created = await createRequest({
       user_id: userId,
       company_id: companyId != null && Number.isFinite(companyId) ? companyId : null,
@@ -589,14 +637,12 @@ export default function UserDashboard() {
       relative_location: newReq.location,
       request_description: newReq.description,
       request_note: newReq.note,
+      assignment_mode: newReq.assignmentMode,
       issue_type: newReq.serviceType,
       priority: "normal",
       service_id: Number.isFinite(serviceId) ? serviceId : null,
       service_quantity: 1,
-      service_price:
-        selectedCompanyService && Number.isFinite(selectedCompanyService.price)
-          ? selectedCompanyService.price
-          : null,
+      service_price: Number.isFinite(lockedServicePrice) ? lockedServicePrice : null,
       });
     } catch (err) {
       console.error(err);
@@ -622,8 +668,7 @@ export default function UserDashboard() {
       }
     }
 
-    const companyMap = new Map(companies.map((c) => [c.id, c]));
-    await refreshRequests(companyMap);
+    await refreshRequests(companyDirectoryRef.current);
   };
 
   const cancelRequest = async (request) => {
@@ -635,8 +680,7 @@ export default function UserDashboard() {
         changed_by: "user",
         note: reason || "User cancelled request",
       });
-      const companyMap = new Map(companies.map((c) => [c.id, c]));
-      await refreshRequests(companyMap);
+      await refreshRequests(companyDirectoryRef.current);
       setSelectedRequest((prev) => (prev?.id === request.id ? { ...prev, status: "cancelled" } : prev));
     } catch (e) {
       console.error(e);
@@ -689,8 +733,7 @@ export default function UserDashboard() {
     setStarValue(0);
     setRatingText("");
 
-    const companyMap = new Map(companies.map((c) => [c.id, c]));
-    await refreshRequests(companyMap);
+    await refreshRequests(companyDirectoryRef.current);
   };
 
   const openRatingModal = (request) => {
@@ -703,8 +746,7 @@ export default function UserDashboard() {
     if (!request?.id || !window.confirm("Bạn có chắc muốn xóa đánh giá này?")) return;
     try {
       await deleteReview(request.id);
-      const companyMap = new Map(companies.map((c) => [c.id, c]));
-      await refreshRequests(companyMap);
+      await refreshRequests(companyDirectoryRef.current);
     } catch (error) {
       console.error(error);
       window.alert(error instanceof Error ? error.message : "Xóa đánh giá thất bại");

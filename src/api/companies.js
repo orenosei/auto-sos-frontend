@@ -41,6 +41,14 @@ export async function getCompanyRating(companyId) {
   return res.data;
 }
 
+export async function recommendCompany({ latitude, longitude, service_id }) {
+  const res = await apiRequest("/api/companies/recommend", {
+    method: "POST",
+    body: { latitude, longitude, service_id },
+  });
+  return res.data;
+}
+
 export async function addCompanyService(companyId, payload) {
   const res = await apiRequest(`/api/companies/${companyId}/services`, {
     method: "POST",

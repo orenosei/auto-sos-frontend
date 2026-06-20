@@ -1,6 +1,6 @@
 import React from 'react';
 import { useUserDashboard } from '../UserDashboardContext';
-import { CheckCircle2, Loader2, Star, MapPin, X, Camera, Send, Clock } from "lucide-react";
+import { CheckCircle2, Loader2, Star, MapPin, X, Camera, Send, Clock, Sparkles, ListChecks } from "lucide-react";
 import LocationPickerMap from "../../../components/LocationPickerMap";
 
 export default function NewTab() {
@@ -39,11 +39,59 @@ export default function NewTab() {
           {/* Step 1: Choose company */}
           {newReq.step === 1 && (
             <div>
-              <h2 className="text-lg font-bold text-gray-800 mb-2">Chọn đơn vị cứu hộ</h2>
+              <h2 className="text-lg font-bold text-gray-800 mb-2">Chọn cách phân công</h2>
+              <div className="mb-5 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setNewReq({
+                      ...newReq,
+                      assignmentMode: "automatic",
+                      selectedCompanyId: "",
+                      serviceType: "",
+                    })
+                  }
+                  className={`rounded-2xl border-2 p-4 text-left transition-all ${
+                    newReq.assignmentMode === "automatic"
+                      ? "border-pink-400 bg-pink-50"
+                      : "border-gray-100 hover:border-pink-200"
+                  }`}
+                >
+                  <Sparkles size={22} className="mb-2 text-pink-500" />
+                  <p className="font-semibold text-gray-800">Tự động phân công</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Hệ thống xếp hạng theo khoảng cách, phản hồi, đánh giá và chi phí.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setNewReq({
+                      ...newReq,
+                      assignmentMode: "manual",
+                      serviceType: "",
+                    })
+                  }
+                  className={`rounded-2xl border-2 p-4 text-left transition-all ${
+                    newReq.assignmentMode !== "automatic"
+                      ? "border-pink-400 bg-pink-50"
+                      : "border-gray-100 hover:border-pink-200"
+                  }`}
+                >
+                  <ListChecks size={22} className="mb-2 text-pink-500" />
+                  <p className="font-semibold text-gray-800">Chọn thủ công</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Tự xem danh sách và chọn đơn vị cứu hộ mong muốn.
+                  </p>
+                </button>
+              </div>
+
+              {newReq.assignmentMode !== "automatic" && (
+                <>
               <p className="text-sm text-gray-500 mb-4">
                 {Number.isFinite(newReq.latitude) && Number.isFinite(newReq.longitude)
-                  ? "Các đơn vị gần bạn nhất (sắp xếp theo GPS):"
-                  : "Các đơn vị gần bạn nhất (hãy bấm GPS để sắp xếp chính xác):"}
+                  ? "Các đơn vị gần bạn nhất:"
+                  : "Các đơn vị gần bạn nhất:"}
               </p>
               <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
                 {companiesWithDistance.map((c) => (
@@ -100,8 +148,12 @@ export default function NewTab() {
                   </div>
                 ))}
               </div>
+                </>
+              )}
               <button
-                disabled={!newReq.selectedCompanyId}
+                disabled={
+                  newReq.assignmentMode !== "automatic" && !newReq.selectedCompanyId
+                }
                 onClick={() => setNewReq({ ...newReq, step: 2 })}
                 className="mt-6 w-full bg-linear-to-r from-pink-500 to-pink-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md hover:shadow-pink-200 transition-all"
               >
@@ -168,10 +220,13 @@ export default function NewTab() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Đơn vị đã chọn
+                    Phương thức phân công
                   </label>
                   <div className="bg-pink-50 border border-pink-200 rounded-xl px-4 py-2.5 text-sm text-pink-700 font-medium">
-                    {companies.find((c) => c.id === newReq.selectedCompanyId)?.name || "Chưa chọn đơn vị"}
+                    {newReq.assignmentMode === "automatic"
+                      ? "Hệ thống tự động chọn đơn vị phù hợp nhất"
+                      : companies.find((c) => c.id === newReq.selectedCompanyId)?.name ||
+                        "Chưa chọn đơn vị"}
                   </div>
                 </div>
                 <div>
@@ -301,7 +356,7 @@ export default function NewTab() {
                 </button>
                 <button
                   disabled={
-                    !newReq.selectedCompanyId ||
+                    (newReq.assignmentMode !== "automatic" && !newReq.selectedCompanyId) ||
                     !newReq.description ||
                     !newReq.location ||
                     !Number.isFinite(newReq.latitude) ||
@@ -323,6 +378,7 @@ export default function NewTab() {
                         longitude: undefined,
                         step: 1,
                         selectedCompanyId: rememberedCompanyId,
+                        assignmentMode: newReq.assignmentMode,
                         imageUrls: [],
                       });
                     } catch (e) {
