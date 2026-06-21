@@ -3,6 +3,7 @@ import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-lea
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { formatAdministrativeAddress, reverseGeocode } from "../utils/gpsUtils";
+import { useToast } from "./ui/toastContext";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -57,6 +58,7 @@ function MapSizeFixer() {
 }
 
 export default function LocationPickerMap({ lat, lng, address, onPick }) {
+  const notify = useToast();
   const [locating, setLocating] = useState(false);
   const [resolvingAddress, setResolvingAddress] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState("");
@@ -93,7 +95,7 @@ export default function LocationPickerMap({ lat, lng, address, onPick }) {
 
   const pickCurrentLocation = () => {
     if (!navigator.geolocation) {
-      window.alert("Trình duyệt không hỗ trợ lấy vị trí hiện tại.");
+      notify.warning("Trình duyệt không hỗ trợ lấy vị trí hiện tại.");
       return;
     }
 
@@ -105,7 +107,7 @@ export default function LocationPickerMap({ lat, lng, address, onPick }) {
       },
       () => {
         setLocating(false);
-        window.alert("Không lấy được vị trí hiện tại. Vui lòng cấp quyền vị trí hoặc nhấp trực tiếp trên bản đồ.");
+        notify.error("Vui lòng cấp quyền vị trí hoặc nhấp trực tiếp trên bản đồ.", "Không lấy được vị trí");
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );

@@ -21,9 +21,17 @@ import RequestsTab from './components/RequestsTab';
 import ContentTab from './components/ContentTab';
 import { AdminDashboardContext } from "./AdminDashboardContext";
 import { deleteUser, getUsers, updateUser } from "../../api/users";
-import { deleteCompany, getCompanies, updateCompany } from "../../api/companies";
+import {
+  deleteCompany,
+  getCompanies,
+  getCompanyReports,
+  updateCompany,
+  updateCompanyReportStatus,
+} from "../../api/companies";
 import { getRequests } from "../../api/requests";
 import { toUiRequest } from "../../api/mappers";
+import { verifyAdminAccess } from "../../api/auth";
+import { useToast } from "../../components/ui/toastContext";
 import {
   BarChart,
   Bar,
@@ -39,25 +47,7 @@ import {
 } from "recharts";
 
 const PIE_COLORS = ["#f472b6", "#f472b6", "#a78bfa", "#fb923c", "#34d399"];
-const LOCKED_COMPANIES_KEY = "rescuesos.admin.lockedCompanies";
-
-const loadLockedCompanies = () => {
-  try {
-    const raw = window.localStorage.getItem(LOCKED_COMPANIES_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveLockedCompanies = (ids) => {
-  try {
-    window.localStorage.setItem(LOCKED_COMPANIES_KEY, JSON.stringify(ids));
-  } catch {
-    // ignore storage failures
-  }
-};
+const ADMIN_ACCESS_KEY = "rescuesos.admin.access";
 
 const statusConfig = {
   pending: { label: "Chờ tiếp nhận", color: "text-yellow-600 bg-yellow-50 border-yellow-200" },
@@ -70,17 +60,24 @@ const statusConfig = {
 };
 
 export default function AdminDashboard() {
+  const notify = useToast();
+  const [hasAdminAccess, setHasAdminAccess] = useState(
+    () => window.sessionStorage.getItem(ADMIN_ACCESS_KEY) === "granted"
+  );
+  const [adminCode, setAdminCode] = useState("");
+  const [adminAccessError, setAdminAccessError] = useState("");
+  const [checkingAdminCode, setCheckingAdminCode] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [searchText, setSearchText] = useState("");
 
   const [users, setUsers] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [companyReports, setCompanyReports] = useState([]);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [selectedRequest, setSelectedRequest] = useState(null);
-  const [lockedCompanyIds, setLockedCompanyIds] = useState(loadLockedCompanies);
 
   const computedStats = useMemo(() => {
     const totalUsers = users.length;
@@ -145,11 +142,19 @@ export default function AdminDashboard() {
   }, [requests]);
 
   useEffect(() => {
+    if (!hasAdminAccess) return undefined;
     let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        const [u, c] = await Promise.all([getUsers(), getCompanies()]);
+        const [u, c, reports] = await Promise.all([
+          getUsers(),
+          getCompanies(),
+          getCompanyReports().catch((error) => {
+            console.warn("Không thể tải báo cáo công ty:", error);
+            return [];
+          }),
+        ]);
         if (cancelled) return;
 
         const uiUsers = u.map((x) => ({
@@ -163,7 +168,6 @@ export default function AdminDashboard() {
         }));
         setUsers(uiUsers);
 
-        const lockedIds = new Set(loadLockedCompanies());
         const uiCompanies = c.map((x) => ({
           id: String(x.company_id),
           name: x.company_name,
@@ -180,15 +184,16 @@ export default function AdminDashboard() {
           rating: Number(x.average_rating ?? 0) || 0,
           totalReviews: Number(x.review_count ?? 0) || 0,
           responseTime: Number(x.avg_response_minutes ?? 0) || 0,
-          locked: lockedIds.has(String(x.company_id)),
+          locked: x.is_active === false,
         }));
         setCompanies(uiCompanies);
+        setCompanyReports(reports ?? []);
 
         const userById = new Map(uiUsers.map((x) => [x.id, x]));
         const companyNameById = new Map(uiCompanies.map((x) => [x.id, x.name]));
 
         const requestsById = new Map();
-        const backendRequests = await getRequests();
+        const backendRequests = await getRequests({ all: true });
         for (const r of backendRequests) {
             const urow = r.user_id != null ? userById.get(String(r.user_id)) : undefined;
             const mapped = toUiRequest(r, {
@@ -214,7 +219,23 @@ export default function AdminDashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [hasAdminAccess]);
+
+  const handleAdminAccess = async (event) => {
+    event.preventDefault();
+    setCheckingAdminCode(true);
+    setAdminAccessError("");
+    try {
+      await verifyAdminAccess(adminCode);
+      window.sessionStorage.setItem(ADMIN_ACCESS_KEY, "granted");
+      setHasAdminAccess(true);
+      setAdminCode("");
+    } catch (error) {
+      setAdminAccessError(error instanceof Error ? error.message : "Không thể xác thực mã quản trị viên");
+    } finally {
+      setCheckingAdminCode(false);
+    }
+  };
 
   const tabs = [
     { key: "overview", label: "Tổng quan", icon: <TrendingUp size={16} /> },
@@ -236,12 +257,16 @@ export default function AdminDashboard() {
       );
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Cập nhật tài khoản thất bại");
+      notify.error(e instanceof Error ? e.message : "Cập nhật tài khoản thất bại");
     }
   };
 
   const handleDeleteUser = async (user) => {
-    const ok = window.confirm(`Xóa tài khoản "${user.name}"?`);
+    const ok = await notify.confirm({
+      title: "Xóa tài khoản?",
+      description: `Tài khoản "${user.name}" sẽ bị xóa khỏi hệ thống.`,
+      confirmText: "Xóa tài khoản",
+    });
     if (!ok) return;
 
     try {
@@ -249,20 +274,17 @@ export default function AdminDashboard() {
       setUsers((prev) => prev.filter((u) => u.id !== user.id));
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Xóa tài khoản thất bại");
+      notify.error(e instanceof Error ? e.message : "Xóa tài khoản thất bại");
     }
   };
 
   const handleToggleCompanyVerified = async (company) => {
     if (!company.verified && company.verificationDocumentUrls.length === 0) {
-      window.alert("Công ty cần tải tài liệu kiểm duyệt trước khi xác minh");
+      notify.warning("Công ty cần tải tài liệu kiểm duyệt trước khi xác minh");
       return;
     }
     try {
       const updated = await updateCompany(company.id, { is_verified: !company.verified });
-      const nextLockedIds = lockedCompanyIds.filter((id) => id !== String(company.id));
-      setLockedCompanyIds(nextLockedIds);
-      saveLockedCompanies(nextLockedIds);
       setCompanies((prev) =>
         prev.map((c) =>
           c.id === company.id ? { ...c, verified: !!updated.is_verified, locked: false } : c
@@ -270,44 +292,59 @@ export default function AdminDashboard() {
       );
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Cập nhật xác minh thất bại");
+      notify.error(e instanceof Error ? e.message : "Cập nhật xác minh thất bại");
     }
   };
 
   const handleLockCompany = async (company) => {
-    const ok = window.confirm(`Bạn có chắc muốn khóa công ty "${company.name}"?`);
+    const ok = await notify.confirm({
+      title: "Khóa công ty?",
+      description: `Công ty "${company.name}" sẽ không thể tiếp tục hoạt động trên hệ thống.`,
+      confirmText: "Khóa công ty",
+    });
     if (!ok) return;
     try {
-      const updated = await updateCompany(company.id, { is_verified: false });
-      const nextLockedIds = Array.from(new Set([...lockedCompanyIds, String(company.id)]));
-      setLockedCompanyIds(nextLockedIds);
-      saveLockedCompanies(nextLockedIds);
+      const updated = await updateCompany(company.id, { is_verified: false, is_active: false });
       setCompanies((prev) =>
         prev.map((c) =>
-          c.id === company.id ? { ...c, verified: !!updated.is_verified, locked: true } : c
+          c.id === company.id ? { ...c, verified: !!updated.is_verified, locked: updated.is_active === false } : c
         )
       );
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Khóa công ty thất bại");
+      notify.error(e instanceof Error ? e.message : "Khóa công ty thất bại");
     }
   };
 
   const handleUnlockCompany = async (company) => {
-    const ok = window.confirm(`Mở khóa công ty "${company.name}"?`);
+    const ok = await notify.confirm({
+      title: "Mở khóa công ty?",
+      description: `Khôi phục quyền hoạt động cho công ty "${company.name}".`,
+      confirmText: "Mở khóa",
+      tone: "default",
+    });
     if (!ok) return;
-    const nextLockedIds = lockedCompanyIds.filter((id) => id !== String(company.id));
-    setLockedCompanyIds(nextLockedIds);
-    saveLockedCompanies(nextLockedIds);
-    setCompanies((prev) =>
-      prev.map((c) =>
-        c.id === company.id ? { ...c, locked: false, verified: false } : c
-      )
-    );
+    try {
+      const updated = await updateCompany(company.id, { is_active: true });
+      setCompanies((prev) =>
+        prev.map((c) =>
+          c.id === company.id
+            ? { ...c, locked: updated.is_active === false, verified: !!updated.is_verified }
+            : c
+        )
+      );
+    } catch (e) {
+      console.error(e);
+      notify.error(e instanceof Error ? e.message : "Mở khóa công ty thất bại");
+    }
   };
 
   const handleDeleteCompany = async (company) => {
-    const ok = window.confirm(`Xóa công ty "${company.name}"? Các dữ liệu liên quan có thể bị ảnh hưởng.`);
+    const ok = await notify.confirm({
+      title: "Xóa công ty?",
+      description: `Công ty "${company.name}" sẽ bị xóa. Các dữ liệu liên quan có thể bị ảnh hưởng.`,
+      confirmText: "Xóa công ty",
+    });
     if (!ok) return;
     try {
       await deleteCompany(company.id);
@@ -315,7 +352,23 @@ export default function AdminDashboard() {
       setRequests((prev) => prev.map((r) => (r.companyId === company.id ? { ...r, companyName: "" } : r)));
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Xóa công ty thất bại");
+      notify.error(e instanceof Error ? e.message : "Xóa công ty thất bại");
+    }
+  };
+
+  const handleCompanyReportStatus = async (report, status) => {
+    try {
+      const updated = await updateCompanyReportStatus(report.report_id, status);
+      setCompanyReports((prev) =>
+        prev.map((item) =>
+          String(item.report_id) === String(report.report_id)
+            ? { ...item, ...updated }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error(error);
+      notify.error(error instanceof Error ? error.message : "Không thể cập nhật báo cáo");
     }
   };
 
@@ -326,8 +379,44 @@ export default function AdminDashboard() {
     requests.filter((r) => r.userId === String(userId)).length;
 
   const contextValue = {
-    activeTab, setActiveTab, users, setUsers, companies, setCompanies, requests, setRequests, loading, setLoading, searchText, setSearchText, computedStats, monthlyData, serviceDistribution, handleDeleteUser, handleToggleUserActive, handleToggleCompanyVerified, handleLockCompany, handleUnlockCompany, handleDeleteCompany, setSelectedUser, setSelectedCompany, setSelectedRequest, getCompanyRequestCount, getUserRequestCount, statusConfig, PIE_COLORS
+    activeTab, setActiveTab, users, setUsers, companies, setCompanies, companyReports, setCompanyReports, requests, setRequests, loading, setLoading, searchText, setSearchText, computedStats, monthlyData, serviceDistribution, handleDeleteUser, handleToggleUserActive, handleToggleCompanyVerified, handleLockCompany, handleUnlockCompany, handleDeleteCompany, handleCompanyReportStatus, setSelectedUser, setSelectedCompany, setSelectedRequest, getCompanyRequestCount, getUserRequestCount, statusConfig, PIE_COLORS
   };
+
+  if (!hasAdminAccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 bg-linear-to-br from-purple-50 via-white to-pink-50">
+        <form onSubmit={handleAdminAccess} className="w-full max-w-sm rounded-2xl border border-purple-100 bg-white p-6 shadow-xl">
+          <div className="mb-5 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-100 text-purple-600">
+              <ShieldCheck size={24} />
+            </div>
+            <h1 className="text-xl font-bold text-gray-900">Truy cập quản trị</h1>
+            <p className="mt-1 text-sm text-gray-500">Nhập mã quản trị viên để tiếp tục</p>
+          </div>
+          <input
+            type="password"
+            value={adminCode}
+            onChange={(event) => setAdminCode(event.target.value)}
+            placeholder="Mã quản trị viên"
+            autoFocus
+            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-100"
+          />
+          {adminAccessError && (
+            <p className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
+              {adminAccessError}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={checkingAdminCode || !adminCode}
+            className="mt-4 w-full rounded-xl bg-purple-600 py-3 text-sm font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {checkingAdminCode ? "Đang kiểm tra..." : "Truy cập"}
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <AdminDashboardContext.Provider value={contextValue}>

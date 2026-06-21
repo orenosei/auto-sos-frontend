@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Car, User, Building2, ShieldCheck, ArrowRight, Eye, EyeOff, Camera, FileUp, MapPin } from "lucide-react";
+import { Car, User, Building2, ArrowRight, Eye, EyeOff, Camera, FileUp, MapPin } from "lucide-react";
 import { useApp } from "../context/useApp";
 import LocationPickerMap from "../components/LocationPickerMap";
 import { uploadFileToCloudinary } from "../api/uploads";
@@ -51,17 +51,7 @@ export default function Login() {
       icon: <Building2 className="w-5 h-5" />,
       color: "blue",
     },
-    {
-      role: "admin",
-      label: "Quản trị viên",
-      desc: "Quản lý hệ thống",
-      icon: <ShieldCheck className="w-5 h-5" />,
-      color: "purple",
-    },
   ];
-
-  const roleOptions =
-    activeTab === "register" ? roles.filter((r) => r.role !== "admin") : roles;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -69,10 +59,6 @@ export default function Login() {
     setSubmitting(true);
     try {
       if (activeTab === "register") {
-        if (selectedRole === "admin") {
-          throw new Error("Hiện chưa hỗ trợ đăng ký tài khoản admin");
-        }
-
         if (selectedRole === "company") {
           const lat = Number.parseFloat(companyRegisterForm.lat);
           const lng = Number.parseFloat(companyRegisterForm.lng);
@@ -129,8 +115,7 @@ export default function Login() {
         return;
       }
 
-      // backend dùng field "identifier" (user_name / phone / email)
-      await login(selectedRole, loginForm.identifier.trim(), loginForm.password);
+      await login(loginForm.identifier.trim(), loginForm.password);
       navigate("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Đăng nhập thất bại");
@@ -198,11 +183,11 @@ export default function Login() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl border border-pink-100 p-6">
-          {/* Role Selection */}
-          <div className="mb-5">
+          {/* Chỉ cần chọn loại tài khoản khi đăng ký */}
+          {activeTab === "register" && <div className="mb-5">
             <label className="text-sm font-medium text-gray-700 mb-2.5 block">Tôi là</label>
             <div className="space-y-2">
-              {roleOptions.map((r) => {
+              {roles.map((r) => {
                 const colors = colorClass[r.color] ?? colorClass.pink;
                 const isSelected = selectedRole === r.role;
                 return (
@@ -233,7 +218,7 @@ export default function Login() {
                 );
               })}
             </div>
-          </div>
+          </div>}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -241,19 +226,11 @@ export default function Login() {
               <>
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-1.5 block">
-                    {selectedRole === "company"
-                      ? "Tên công ty / SĐT"
-                      : "Email / SĐT / Tên đăng nhập"}
+                    Tên đăng nhập
                   </label>
                   <input
                     type="text"
-                    placeholder={
-                      selectedRole === "user"
-                        ? "email / số điện thoại / username"
-                        : selectedRole === "company"
-                        ? "tên công ty / số điện thoại"
-                        : "email / số điện thoại / username"
-                    }
+                    placeholder="Tên đăng nhập, email, SĐT hoặc tên công ty"
                     value={loginForm.identifier}
                     onChange={(e) =>
                       setLoginForm((f) => ({ ...f, identifier: e.target.value }))

@@ -31,6 +31,7 @@ import {
 } from "../api/community";
 import { uploadFileToCloudinary } from "../api/uploads";
 import { useApp } from "../context/useApp";
+import { useToast } from "../components/ui/toastContext";
 
 const categories = ["Tất cả", "Kinh nghiệm", "Kiến thức", "Cần tư vấn", "Đánh giá dịch vụ"];
 
@@ -81,6 +82,7 @@ function Avatar({ src, name, size = "md" }) {
 }
 
 export default function Community() {
+  const notify = useToast();
   const { currentUser, isLoggedIn, currentRole } = useApp();
   const userId = currentRole === "user" || currentRole === "admin" ? currentUser?.id : null;
   const canInteract = isLoggedIn && !!userId;
@@ -97,6 +99,7 @@ export default function Community() {
   const [selectedPost, setSelectedPost] = useState(null);
   const [newPost, setNewPost] = useState(emptyPost);
   const [comment, setComment] = useState("");
+  const [commentError, setCommentError] = useState("");
   const [sortBy, setSortBy] = useState("newest");
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const [currentPage, setCurrentPage] = useState(1);
@@ -164,6 +167,8 @@ export default function Community() {
   };
 
   const openPost = async (post) => {
+    setComment("");
+    setCommentError("");
     setSelectedPost({ ...post, loading: true, commentItems: [] });
     try {
       const detail = await getCommunityPost(post.id, userId);
@@ -279,7 +284,11 @@ export default function Community() {
 
   const removePost = async (post) => {
     if (!requireUser()) return;
-    const ok = window.confirm(`Xóa bài viết "${post.title}"?`);
+    const ok = await notify.confirm({
+      title: "Xóa bài viết?",
+      description: `Bài viết "${post.title}" sẽ bị xóa vĩnh viễn.`,
+      confirmText: "Xóa bài viết",
+    });
     if (!ok) return;
 
     try {
@@ -302,7 +311,7 @@ export default function Community() {
     if (!requireUser() || !selectedPost || !comment.trim()) return;
 
     setSubmitting(true);
-    setError("");
+    setCommentError("");
     try {
       const created = await createCommunityComment(selectedPost.id, {
         user_id: userId,
@@ -320,7 +329,7 @@ export default function Community() {
       );
       setComment("");
     } catch (err) {
-      setError(err.message || "Không thể gửi bình luận");
+      setCommentError(err.message || "Không thể gửi bình luận");
     } finally {
       setSubmitting(false);
     }
@@ -328,7 +337,13 @@ export default function Community() {
 
   const reportContent = async (targetType, targetId) => {
     if (!requireUser()) return;
-    const reason = window.prompt("Nhập lý do báo cáo vi phạm:");
+    const reason = await notify.prompt({
+      title: "Báo cáo nội dung",
+      description: "Mô tả ngắn gọn lý do bạn cho rằng nội dung này vi phạm.",
+      placeholder: "Nhập lý do báo cáo...",
+      confirmText: "Gửi báo cáo",
+      required: true,
+    });
     if (!reason?.trim()) return;
 
     try {
@@ -338,7 +353,7 @@ export default function Community() {
         target_id: targetId,
         reason: reason.trim(),
       });
-      setError("Đã gửi báo cáo cho quản trị viên.");
+      notify.success("Quản trị viên sẽ xem xét nội dung này.", "Đã gửi báo cáo");
     } catch (err) {
       setError(err.message || "Không thể gửi báo cáo");
     }
@@ -805,7 +820,14 @@ export default function Community() {
               >
                 {selectedPost.category}
               </span>
-              <button onClick={() => setSelectedPost(null)} className="text-gray-400 hover:text-gray-600">
+              <button
+                onClick={() => {
+                  setSelectedPost(null);
+                  setComment("");
+                  setCommentError("");
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -914,12 +936,21 @@ export default function Community() {
                         ))
                       )}
                     </div>
+                    {commentError && (
+                      <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                        <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                        <span>{commentError}</span>
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <input
                         type="text"
                         placeholder="Viết bình luận..."
                         value={comment}
-                        onChange={(e) => setComment(e.target.value)}
+                        onChange={(e) => {
+                          setComment(e.target.value);
+                          if (commentError) setCommentError("");
+                        }}
                         className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-pink-400"
                       />
                       <button

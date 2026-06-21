@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useAdminDashboard } from '../AdminDashboardContext';
-import { ShieldCheck, ShieldX, Search, Eye, Star, CheckCircle2, Lock, Trash2, Unlock } from "lucide-react";
+import { ShieldCheck, ShieldX, Search, Eye, Star, CheckCircle2, Lock, Trash2, Unlock, Flag, XCircle } from "lucide-react";
 
 export default function CompaniesTab() {
   const context = useAdminDashboard();
   const { 
-    companies, searchText, setSearchText, handleToggleCompanyVerified, handleLockCompany, handleUnlockCompany, handleDeleteCompany, setSelectedCompany, getCompanyRequestCount
+    companies, companyReports, searchText, setSearchText, handleToggleCompanyVerified, handleLockCompany, handleUnlockCompany, handleDeleteCompany, handleCompanyReportStatus, setSelectedCompany, getCompanyRequestCount
   } = context;
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
@@ -40,9 +40,52 @@ export default function CompaniesTab() {
   const totalPages = Math.max(1, Math.ceil(filteredCompanies.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const pageCompanies = filteredCompanies.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pendingReports = companyReports.filter((report) => report.status === "pending");
+  const pendingReportCount = (companyId) =>
+    pendingReports.filter((report) => String(report.company_id) === String(companyId)).length;
 
   return (
     <div>
+          {pendingReports.length > 0 && (
+            <div className="mb-5 rounded-2xl border border-red-200 bg-red-50/60 p-4">
+              <div className="mb-3 flex items-center gap-2 text-red-700">
+                <Flag size={17} />
+                <h2 className="font-bold">Báo cáo công ty chờ xử lý ({pendingReports.length})</h2>
+              </div>
+              <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                {pendingReports.map((report) => (
+                  <div key={report.report_id} className="rounded-xl border border-red-100 bg-white p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">{report.company_name}</p>
+                        <p className="mt-1 text-sm text-gray-600">{report.reason}</p>
+                        <p className="mt-1 text-xs text-gray-400">
+                          Người báo cáo: {report.reporter_full_name || report.reporter_user_name || "Không xác định"} ·{" "}
+                          {new Date(report.created_at).toLocaleString("vi-VN")}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          onClick={() => handleCompanyReportStatus(report, "reviewed")}
+                          className="inline-flex items-center gap-1 rounded-lg bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-600 hover:bg-green-100"
+                        >
+                          <CheckCircle2 size={12} />
+                          Đã xử lý
+                        </button>
+                        <button
+                          onClick={() => handleCompanyReportStatus(report, "dismissed")}
+                          className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-200"
+                        >
+                          <XCircle size={12} />
+                          Bỏ qua
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <div className="relative flex-1 max-w-xs">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -116,6 +159,12 @@ export default function CompaniesTab() {
                           </span>
                           <span>GP: {company.license}</span>
                           <span>{getCompanyRequestCount(company.id)} yêu cầu</span>
+                          {pendingReportCount(company.id) > 0 && (
+                            <span className="inline-flex items-center gap-1 font-semibold text-red-600">
+                              <Flag size={11} />
+                              {pendingReportCount(company.id)} báo cáo chờ xử lý
+                            </span>
+                          )}
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {company.verificationDocumentUrls.length === 0 ? (

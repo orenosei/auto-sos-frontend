@@ -41,6 +41,14 @@ export async function getCompanyRating(companyId) {
   return res.data;
 }
 
+export async function recommendCompany({ latitude, longitude, service_id }) {
+  const res = await apiRequest("/api/companies/recommend", {
+    method: "POST",
+    body: { latitude, longitude, service_id },
+  });
+  return res.data;
+}
+
 export async function addCompanyService(companyId, payload) {
   const res = await apiRequest(`/api/companies/${companyId}/services`, {
     method: "POST",
@@ -83,6 +91,30 @@ export async function changeCompanyPassword(companyId, payload) {
 export async function deleteCompany(companyId) {
   const res = await apiRequest(`/api/companies/${companyId}`, {
     method: "DELETE",
+  });
+  return res.data;
+}
+
+export async function reportCompany(companyId, payload) {
+  const res = await apiRequest(`/api/companies/${companyId}/reports`, {
+    method: "POST",
+    body: payload,
+  });
+  return res.data;
+}
+
+export async function getCompanyReports(status) {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  const query = params.toString();
+  const res = await apiRequest(`/api/companies/reports${query ? `?${query}` : ""}`);
+  return res.data;
+}
+
+export async function updateCompanyReportStatus(reportId, status) {
+  const res = await apiRequest(`/api/companies/reports/${reportId}/status`, {
+    method: "PUT",
+    body: { status },
   });
   return res.data;
 }

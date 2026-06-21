@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Plus,
   Clock,
@@ -23,7 +23,7 @@ import {
   Send,
 } from "lucide-react";
 import { useApp } from "../../context/useApp";
-import { getCompanies, getCompanyReviews, getCompanyServices, getNearbyCompanies } from "../../api/companies";
+import { getCompanies, getCompanyReviews, getCompanyServices, getNearbyCompanies, recommendCompany, reportCompany } from "../../api/companies";
 import { getServices } from "../../api/services";
 import { createRequest, getRequestServices, getRequests, updateRequestStatus } from "../../api/requests";
 import { addRequestImage, getRequestImages, uploadRequestImageToCloudinary } from "../../api/requestImages";
@@ -34,9 +34,11 @@ import { UserDashboardContext } from "./UserDashboardContext";
 import { useToast } from "../../components/ui/toastContext";
 import { toUiCompany, toUiRequest, toUiService } from "../../api/mappers";
 import { getRequestMessages, addRequestMessage, markMessageSeen } from "../../api/messages";
-import { addReview } from "../../api/reviews";
+import { addReview, deleteReview, updateReview } from "../../api/reviews";
+import { getVehicles } from "../../api/vehicles";
 import { updateUser } from "../../api/users";
 import { uploadFileToCloudinary } from "../../api/uploads";
+import { createVnPayPayment, selectCashPayment } from "../../api/payments";
 import { reverseGeocode, formatAddress, calculateDistance, calculateETA } from "../../utils/gpsUtils";
 
 const statusConfig = {
@@ -65,6 +67,7 @@ const SELECTED_COMPANY_STORAGE_KEY = "rescuesos:selected-company-id";
 export default function UserDashboard() {
   const { currentUser, isLoggedIn, updateCurrentUser } = useApp();
   const locationState = useLocation();
+  const navigate = useNavigate();
 
   const preselectedCompanyId = useMemo(() => {
     const fromRoute = locationState.state?.preselectedCompanyId;
@@ -92,6 +95,9 @@ export default function UserDashboard() {
     return typeof value === "string" && value.trim() ? value : undefined;
   }, [locationState.state]);
 
+  const preselectedAssignmentMode =
+    locationState.state?.assignmentMode === "automatic" ? "automatic" : "manual";
+
   const userId = useMemo(() => {
     if (!currentUser) return null;
     if (currentUser.role !== "user" && currentUser.role !== "admin") return null;
@@ -101,6 +107,7 @@ export default function UserDashboard() {
 
   const [services, setServices] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const companyDirectoryRef = useRef(new Map());
   const [requests, setRequests] = useState([]);
   const [, setLoadingRequests] = useState(false);
 
@@ -109,11 +116,13 @@ export default function UserDashboard() {
   const [newReq, setNewReq] = useState({
     serviceType: "",
     description: "",
+    note: "",
     location: "Đường Phạm Văn Đồng, Q. Bình Thạnh, TP.HCM",
     latitude: undefined,
     longitude: undefined,
     step: 1,
     selectedCompanyId: preselectedCompanyId,
+    assignmentMode: preselectedCompanyId ? "manual" : preselectedAssignmentMode,
     imageUrls: [],
   });
   const [ratingModal, setRatingModal] = useState({ open: false, requestId: "" });
@@ -131,6 +140,7 @@ export default function UserDashboard() {
   const messageTimerRef = useRef(null);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [submittingRequest, setSubmittingRequest] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState({});
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const toast = useToast();
 
@@ -142,6 +152,76 @@ export default function UserDashboard() {
     } catch (e) {
       console.error(e);
       setCompanyReviewModal({ open: true, company, reviews: [], loading: false });
+    }
+  };
+
+  const handleReportCompany = async (company) => {
+    if (!userId) {
+      toast.warning("Vui lòng đăng nhập tài khoản người dùng để báo cáo công ty.");
+      return;
+    }
+    const reason = await toast.prompt({
+      title: "Báo cáo công ty",
+      description: `Cho chúng tôi biết vấn đề với công ty "${company?.name ?? ""}".`,
+      placeholder: "Nhập lý do báo cáo...",
+      confirmText: "Gửi báo cáo",
+      required: true,
+    });
+    if (!reason?.trim()) return;
+    try {
+      await reportCompany(company.id ?? company.company_id, {
+        reporter_user_id: userId,
+        reason: reason.trim(),
+      });
+      toast.push({
+        title: "Đã gửi báo cáo",
+        description: "Quản trị viên sẽ xem xét báo cáo công ty.",
+        type: "success",
+      });
+    } catch (error) {
+      toast.push({
+        title: "Không thể gửi báo cáo",
+        description: error instanceof Error ? error.message : "Vui lòng thử lại.",
+        type: "error",
+      });
+    }
+  };
+
+  const handleCashPayment = async (request) => {
+    if (!userId) return;
+    setPaymentLoading((prev) => ({ ...prev, [request.id]: "cash" }));
+    try {
+      await selectCashPayment(request.id, userId);
+      await refreshRequests(companyDirectoryRef.current, { silent: true });
+      toast.push({
+        title: "Đã chọn thanh toán tiền mặt",
+        description: "Vui lòng thanh toán trực tiếp và chờ công ty xác nhận.",
+        type: "success",
+      });
+    } catch (error) {
+      toast.push({
+        title: "Không thể chọn phương thức thanh toán",
+        description: error instanceof Error ? error.message : "Vui lòng thử lại.",
+        type: "error",
+      });
+    } finally {
+      setPaymentLoading((prev) => ({ ...prev, [request.id]: "" }));
+    }
+  };
+
+  const handleVnPayPayment = async (request) => {
+    if (!userId) return;
+    setPaymentLoading((prev) => ({ ...prev, [request.id]: "vnpay" }));
+    try {
+      const payment = await createVnPayPayment(request.id, userId);
+      window.location.assign(payment.payment_url);
+    } catch (error) {
+      setPaymentLoading((prev) => ({ ...prev, [request.id]: "" }));
+      toast.push({
+        title: "Không thể mở VNPay",
+        description: error instanceof Error ? error.message : "Vui lòng thử lại.",
+        type: "error",
+      });
     }
   };
 
@@ -194,14 +274,33 @@ export default function UserDashboard() {
   ];
 
   const activeRequest = userRequests.find((r) => activeStatuses.has(r.status));
+  const targetRequestId = locationState.state?.requestId;
 
-  const refreshRequests = async (companyNameById) => {
+  useEffect(() => {
+    if (!targetRequestId || requests.length === 0) return;
+    const target = requests.find((request) => String(request.id) === String(targetRequestId));
+    if (!target) return;
+    setSelectedRequest(target);
+    setActiveTab("track");
+    navigate(`${locationState.pathname}${locationState.search}`, {
+      replace: true,
+      state: null,
+    });
+  }, [
+    locationState.pathname,
+    locationState.search,
+    navigate,
+    requests,
+    targetRequestId,
+  ]);
+
+  const refreshRequests = async (companyById, { silent = false } = {}) => {
     if (!userId) {
       setRequests([]);
       return;
     }
 
-    setLoadingRequests(true);
+    if (!silent) setLoadingRequests(true);
     try {
       const backend = await getRequests({ user_id: userId });
       const companyIds = [
@@ -227,6 +326,21 @@ export default function UserDashboard() {
       const reviewByRequestId = new Map(
         reviewRows.map((review) => [String(review.request_id), review])
       );
+      const vehicleRows = (
+        await Promise.all(
+          companyIds.map(async (companyId) => {
+            try {
+              return await getVehicles(companyId);
+            } catch (err) {
+              console.warn(err);
+              return [];
+            }
+          })
+        )
+      ).flat();
+      const vehicleById = new Map(
+        vehicleRows.map((vehicle) => [String(vehicle.vehicle_id), vehicle])
+      );
 
       const mapped = await Promise.all(
         backend.map(async (r) => {
@@ -248,16 +362,30 @@ export default function UserDashboard() {
             console.warn(err);
           }
 
-          const companyName =
-            r.company_id != null ? companyNameById?.get(String(r.company_id)) : undefined;
+          const company =
+            r.company_id != null ? companyById?.get(String(r.company_id)) : undefined;
+          const vehicle =
+            r.vehicle_id != null ? vehicleById.get(String(r.vehicle_id)) : undefined;
+
+          const canRevealCompany =
+            r.assignment_mode !== "automatic" || r.request_status !== "pending";
 
           return {
             ...toUiRequest(r, {
               userName: currentUser?.name ?? "",
               userPhone: currentUser?.phone ?? "",
-              companyName,
+              companyName: canRevealCompany
+                ? typeof company === "string"
+                  ? company
+                  : company?.name
+                : "",
+              companyPhone: canRevealCompany
+                ? company?.phone ?? company?.company_phone ?? ""
+                : "",
               serviceType,
               servicePrice,
+              vehicleLicense: vehicle?.vehicle_license ?? "",
+              vehicleType: vehicle?.vehicle_type ?? "",
             }),
             imageUrls,
             rating: reviewByRequestId.has(String(r.request_id))
@@ -276,7 +404,7 @@ export default function UserDashboard() {
         return mapped.find((request) => request.id === prev.id) ?? prev;
       });
     } finally {
-      setLoadingRequests(false);
+      if (!silent) setLoadingRequests(false);
     }
   };
 
@@ -300,11 +428,16 @@ export default function UserDashboard() {
             }
           })
         );
+        const eligibleCompanies = withServices.filter(
+          (company) => company.verified && company.serviceDetails.length > 0
+        );
 
         if (cancelled) return;
-        setCompanies(withServices);
-        const mapName = new Map(withServices.map((c) => [c.id, c.name]));
-        await refreshRequests(mapName);
+        companyDirectoryRef.current = new Map(
+          withServices.map((company) => [company.id, company])
+        );
+        setCompanies(eligibleCompanies);
+        await refreshRequests(companyDirectoryRef.current);
       } catch (e) {
         console.error(e);
       }
@@ -317,18 +450,37 @@ export default function UserDashboard() {
   }, [userId, isLoggedIn]);
 
   useEffect(() => {
-    if (!preselectedCompanyId) return;
+    if (!userId || companies.length === 0) return undefined;
+    const timer = window.setInterval(() => {
+      refreshRequests(companyDirectoryRef.current, { silent: true }).catch((error) =>
+        console.warn(error)
+      );
+    }, 5000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, companies]);
+
+  useEffect(() => {
+    if (!preselectedCompanyId && preselectedAssignmentMode !== "automatic") return;
 
     setActiveTab("new");
     setNewReq((prev) => ({
       ...prev,
-      selectedCompanyId: preselectedCompanyId,
+      selectedCompanyId:
+        preselectedAssignmentMode === "automatic" ? "" : preselectedCompanyId,
+      assignmentMode: preselectedAssignmentMode,
       latitude: preselectedLat ?? prev.latitude,
       longitude: preselectedLng ?? prev.longitude,
       location: preselectedAddress ?? prev.location,
       step: 1,
     }));
-  }, [preselectedCompanyId, preselectedLat, preselectedLng, preselectedAddress]);
+  }, [
+    preselectedCompanyId,
+    preselectedLat,
+    preselectedLng,
+    preselectedAddress,
+    preselectedAssignmentMode,
+  ]);
 
   useEffect(() => {
     if (!newReq.selectedCompanyId || typeof window === "undefined") return;
@@ -395,10 +547,11 @@ export default function UserDashboard() {
   }, [selectedCompany, newReq.serviceType]);
 
   const availableRequestServices = useMemo(() => {
+    if (newReq.assignmentMode === "automatic") return services;
     const names = new Set((selectedCompany?.serviceDetails ?? []).map((s) => s.name));
     if (names.size === 0) return [];
     return services.filter((s) => names.has(s.name));
-  }, [selectedCompany, services]);
+  }, [newReq.assignmentMode, selectedCompany, services]);
 
   const { latitude, longitude, selectedCompanyId } = newReq;
 
@@ -443,7 +596,7 @@ export default function UserDashboard() {
 
   const getGpsLocation = async () => {
     if (!navigator.geolocation) {
-      window.alert("Trình duyệt không hỗ trợ GPS.");
+      toast.warning("Trình duyệt không hỗ trợ GPS.");
       return null;
     }
 
@@ -472,7 +625,7 @@ export default function UserDashboard() {
           resolve(coords);
         },
         () => {
-          window.alert("Không lấy được vị trí GPS. Vui lòng cấp quyền vị trí.");
+          toast.error("Vui lòng cấp quyền vị trí rồi thử lại.", "Không lấy được vị trí GPS");
           setGpsLoading(false);
           resolve(null);
         },
@@ -510,7 +663,7 @@ export default function UserDashboard() {
       }
     } catch (error) {
       console.error("Không thể tải ảnh lên Cloudinary:", error);
-      window.alert(error instanceof Error ? error.message : "Không thể tải ảnh lên");
+      toast.error(error instanceof Error ? error.message : "Không thể tải ảnh lên");
     } finally {
       setImageUploading(false);
     }
@@ -525,7 +678,7 @@ export default function UserDashboard() {
 
   const submitRequest = async () => {
     if (!isLoggedIn || !userId) {
-      window.alert("Vui lòng đăng nhập để gửi yêu cầu.");
+      toast.warning("Vui lòng đăng nhập để gửi yêu cầu.");
       return;
     }
     if (submittingRequest) return;
@@ -541,29 +694,47 @@ export default function UserDashboard() {
     }
 
     if (lat == null || lng == null) {
+      setSubmittingRequest(false);
       return;
     }
 
-    const companyId = newReq.selectedCompanyId ? Number(newReq.selectedCompanyId) : null;
     const pickedService = requestServiceByName.get(newReq.serviceType);
     const serviceId = pickedService ? Number(pickedService.id) : null;
+    let companyId = newReq.selectedCompanyId ? Number(newReq.selectedCompanyId) : null;
+    let lockedServicePrice =
+      selectedCompanyService && Number.isFinite(selectedCompanyService.price)
+        ? selectedCompanyService.price
+        : null;
 
     let created;
     try {
+      if (!Number.isFinite(serviceId)) {
+        throw new Error("Vui lòng chọn dịch vụ cứu hộ");
+      }
+
+      if (newReq.assignmentMode === "automatic") {
+        const recommendation = await recommendCompany({
+          latitude: lat,
+          longitude: lng,
+          service_id: serviceId,
+        });
+        companyId = Number(recommendation.company_id);
+        lockedServicePrice = Number(recommendation.service_price);
+      }
+
       created = await createRequest({
       user_id: userId,
       company_id: companyId != null && Number.isFinite(companyId) ? companyId : null,
       absolute_location: { lat, lng },
       relative_location: newReq.location,
       request_description: newReq.description,
+      request_note: newReq.note,
+      assignment_mode: newReq.assignmentMode,
       issue_type: newReq.serviceType,
       priority: "normal",
       service_id: Number.isFinite(serviceId) ? serviceId : null,
       service_quantity: 1,
-      service_price:
-        selectedCompanyService && Number.isFinite(selectedCompanyService.price)
-          ? selectedCompanyService.price
-          : null,
+      service_price: Number.isFinite(lockedServicePrice) ? lockedServicePrice : null,
       });
     } catch (err) {
       console.error(err);
@@ -589,12 +760,18 @@ export default function UserDashboard() {
       }
     }
 
-    const mapName = new Map(companies.map((c) => [c.id, c.name]));
-    await refreshRequests(mapName);
+    await refreshRequests(companyDirectoryRef.current);
   };
 
   const cancelRequest = async (request) => {
-    const reason = window.prompt("Lý do hủy yêu cầu (không bắt buộc):", "");
+    const reason = await toast.prompt({
+      title: "Hủy yêu cầu cứu hộ?",
+      description: "Bạn có thể cho đơn vị cứu hộ biết lý do hủy. Nội dung này không bắt buộc.",
+      placeholder: "Nhập lý do hủy...",
+      confirmText: "Xác nhận hủy",
+      tone: "danger",
+    });
+    if (reason === null) return;
     try {
       await updateRequestStatus(request.id, "cancelled", {
         cancelled_by: "user",
@@ -602,12 +779,11 @@ export default function UserDashboard() {
         changed_by: "user",
         note: reason || "User cancelled request",
       });
-      const mapName = new Map(companies.map((c) => [c.id, c.name]));
-      await refreshRequests(mapName);
+      await refreshRequests(companyDirectoryRef.current);
       setSelectedRequest((prev) => (prev?.id === request.id ? { ...prev, status: "cancelled" } : prev));
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Hủy yêu cầu thất bại");
+      toast.error(e instanceof Error ? e.message : "Hủy yêu cầu thất bại");
     }
   };
 
@@ -623,7 +799,7 @@ export default function UserDashboard() {
       });
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Tải avatar thất bại");
+      toast.error(e instanceof Error ? e.message : "Tải avatar thất bại");
     } finally {
       setUploadingAvatar(false);
     }
@@ -631,24 +807,24 @@ export default function UserDashboard() {
 
   const handleRatingSubmit = async () => {
     const currentRequest = requests.find((request) => request.id === ratingModal.requestId);
-    if (currentRequest?.reviewId || currentRequest?.rating) {
-      window.alert("Yêu cầu này đã được đánh giá trước đó.");
-      setRatingModal({ open: false, requestId: "" });
-      return;
-    }
     if (!starValue) {
-      window.alert("Vui lòng chọn số sao đánh giá.");
+      toast.warning("Vui lòng chọn số sao đánh giá.");
       return;
     }
 
     try {
-      await addReview(ratingModal.requestId, {
+      const payload = {
         review_rating: starValue,
         review_comment: ratingText,
-      });
+      };
+      if (currentRequest?.reviewId || currentRequest?.rating) {
+        await updateReview(ratingModal.requestId, payload);
+      } else {
+        await addReview(ratingModal.requestId, payload);
+      }
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Gửi đánh giá thất bại");
+      toast.error(e instanceof Error ? e.message : "Gửi đánh giá thất bại");
       return;
     }
 
@@ -656,12 +832,34 @@ export default function UserDashboard() {
     setStarValue(0);
     setRatingText("");
 
-    const mapName = new Map(companies.map((c) => [c.id, c.name]));
-    await refreshRequests(mapName);
+    await refreshRequests(companyDirectoryRef.current);
+  };
+
+  const openRatingModal = (request) => {
+    setStarValue(Number(request?.rating) || 0);
+    setRatingText(request?.review ?? "");
+    setRatingModal({ open: true, requestId: request?.id ?? "" });
+  };
+
+  const handleDeleteReview = async (request) => {
+    if (!request?.id) return;
+    const confirmed = await toast.confirm({
+      title: "Xóa đánh giá?",
+      description: "Đánh giá của bạn sẽ bị xóa khỏi yêu cầu này.",
+      confirmText: "Xóa đánh giá",
+    });
+    if (!confirmed) return;
+    try {
+      await deleteReview(request.id);
+      await refreshRequests(companyDirectoryRef.current);
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : "Xóa đánh giá thất bại");
+    }
   };
 
   const contextValue = {
-    currentUser, isLoggedIn, locationState, preselectedCompanyId, preselectedLat, preselectedLng, preselectedAddress, userId, services, setServices, companies, setCompanies, requests, setRequests, setLoadingRequests, activeTab, setActiveTab, selectedRequest, setSelectedRequest, newReq, setNewReq, ratingModal, setRatingModal, companyReviewModal, setCompanyReviewModal, openCompanyReviews, starValue, setStarValue, ratingText, setRatingText, messageOpen, setMessageOpen, messages, setMessages, messageInput, setMessageInput, messageTimerRef, sendingMessage, setSendingMessage, submittingRequest, setSubmittingRequest, gpsLoading, setGpsLoading, imageUploading, setImageUploading, imageInputRef, hasAutoGpsTriedRef, toast, refreshRequests, openMessageModal, closeMessageModal, requestServiceByName, availableRequestServices, selectedCompany, selectedCompanyService, companiesWithDistance, getGpsLocation, handleImageSelection, removeUploadedImage, handleRatingSubmit, submitRequest, cancelRequest, statusConfig, serviceIconMap, formatAddress, calculateDistance, calculateETA
+    currentUser, isLoggedIn, locationState, preselectedCompanyId, preselectedLat, preselectedLng, preselectedAddress, userId, services, setServices, companies, setCompanies, requests, setRequests, setLoadingRequests, activeTab, setActiveTab, selectedRequest, setSelectedRequest, newReq, setNewReq, ratingModal, setRatingModal, companyReviewModal, setCompanyReviewModal, openCompanyReviews, handleReportCompany, starValue, setStarValue, ratingText, setRatingText, messageOpen, setMessageOpen, messages, setMessages, messageInput, setMessageInput, messageTimerRef, sendingMessage, setSendingMessage, submittingRequest, setSubmittingRequest, paymentLoading, gpsLoading, setGpsLoading, imageUploading, setImageUploading, imageInputRef, hasAutoGpsTriedRef, toast, refreshRequests, openMessageModal, closeMessageModal, requestServiceByName, availableRequestServices, selectedCompany, selectedCompanyService, companiesWithDistance, getGpsLocation, handleImageSelection, removeUploadedImage, handleRatingSubmit, openRatingModal, handleDeleteReview, handleCashPayment, handleVnPayPayment, submitRequest, cancelRequest, statusConfig, serviceIconMap, formatAddress, calculateDistance, calculateETA
   };
 
   return (
@@ -800,6 +998,13 @@ export default function UserDashboard() {
                 })
               )}
             </div>
+            <button
+              type="button"
+              onClick={() => handleReportCompany(companyReviewModal.company)}
+              className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100"
+            >
+              Báo cáo công ty tới quản trị viên
+            </button>
           </div>
         </div>
       )}
@@ -809,7 +1014,11 @@ export default function UserDashboard() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-gray-900">Đánh giá dịch vụ</h3>
+              <h3 className="font-bold text-gray-900">
+                {requests.find((request) => request.id === ratingModal.requestId)?.reviewId
+                  ? "Sửa đánh giá"
+                  : "Đánh giá dịch vụ"}
+              </h3>
               <button onClick={() => setRatingModal({ open: false, requestId: "" })} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
@@ -832,7 +1041,9 @@ export default function UserDashboard() {
               onClick={handleRatingSubmit}
               className="mt-4 w-full bg-linear-to-r from-pink-500 to-pink-400 text-white py-3 rounded-xl font-semibold hover:shadow-md transition-all"
             >
-              Gửi đánh giá
+              {requests.find((request) => request.id === ratingModal.requestId)?.reviewId
+                ? "Lưu đánh giá"
+                : "Gửi đánh giá"}
             </button>
           </div>
         </div>

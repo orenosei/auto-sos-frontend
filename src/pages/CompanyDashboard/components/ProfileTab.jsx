@@ -8,7 +8,7 @@ import LocationPickerMap from "../../../components/LocationPickerMap";
 export default function ProfileTab() {
   const context = useCompanyDashboard();
   const { 
-    updateCurrentUser, companyId, companyProfile, setCompanyName, setCompanyProfile, profileDraft, setProfileDraft, editingProfile, setEditingProfile, savingProfile, setSavingProfile, parseGeoJsonPoint
+    updateCurrentUser, companyId, companyProfile, setCompanyName, setCompanyProfile, profileDraft, setProfileDraft, editingProfile, setEditingProfile, savingProfile, setSavingProfile, parseGeoJsonPoint, toast
   } = context;
   const [passwordForm, setPasswordForm] = useState({
     current_password: "",
@@ -26,7 +26,7 @@ export default function ProfileTab() {
       onDone(uploaded.secureUrl);
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Tải tệp thất bại");
+      toast.error(e instanceof Error ? e.message : "Tải tệp thất bại");
     }
   };
 
@@ -302,11 +302,11 @@ export default function ProfileTab() {
                     const company_name = profileDraft.company_name.trim();
                     const company_phone = profileDraft.company_phone.trim();
                     if (!company_name) {
-                      window.alert("Vui lòng nhập tên công ty");
+                      toast.warning("Vui lòng nhập tên công ty");
                       return;
                     }
                     if (!company_phone) {
-                      window.alert("Vui lòng nhập số điện thoại");
+                      toast.warning("Vui lòng nhập số điện thoại");
                       return;
                     }
 
@@ -316,7 +316,7 @@ export default function ProfileTab() {
                     const lng = lngRaw ? Number.parseFloat(lngRaw) : null;
                     const hasGeo = latRaw.length > 0 || lngRaw.length > 0;
                     if (hasGeo && (!Number.isFinite(lat) || !Number.isFinite(lng))) {
-                      window.alert("Tọa độ GPS không hợp lệ (lat/lng)");
+                      toast.warning("Tọa độ GPS không hợp lệ (lat/lng)");
                       return;
                     }
 
@@ -370,10 +370,10 @@ export default function ProfileTab() {
                       avatar: updated.company_name?.slice(0, 1)?.toUpperCase() || "C",
                       avatarUrl: updated.avatar_url ?? "",
                     });
-                    window.alert("Đã lưu hồ sơ công ty");
+                    toast.success("Thông tin công ty đã được cập nhật.", "Đã lưu hồ sơ");
                   } catch (e) {
                     console.error(e);
-                    window.alert(e instanceof Error ? e.message : "Lưu hồ sơ thất bại");
+                    toast.error(e instanceof Error ? e.message : "Lưu hồ sơ thất bại");
                   } finally {
                     setSavingProfile(false);
                   }

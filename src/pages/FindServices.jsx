@@ -14,17 +14,21 @@ import {
   Loader,
   AlertCircle,
   X,
+  Sparkles,
+  Flag,
 } from "lucide-react";
-import { getCompanies, getCompanyReviews, getNearbyCompanies } from "../api/companies";
+import { getCompanies, getCompanyReviews, getNearbyCompanies, reportCompany } from "../api/companies";
 import { getServices } from "../api/services";
 import { toUiCompany, toUiService } from "../api/mappers";
 import { useGPS } from "../hooks/useGPS";
 import { calculateDistance, calculateETA, formatAddress } from "../utils/gpsUtils";
 import ServiceMap from "../components/ServiceMap";
 import { useApp } from "../context/useApp";
+import { useToast } from "../components/ui/toastContext";
 
 export default function FindServices() {
-  const { currentRole } = useApp();
+  const notify = useToast();
+  const { currentRole, currentUser, isLoggedIn } = useApp();
   const [searchText, setSearchText] = useState("");
   const [selectedService, setSelectedService] = useState("Tất cả");
   const [sortBy, setSortBy] = useState("distance");
@@ -78,7 +82,9 @@ export default function FindServices() {
         setServices(svc.map(toUiService));
 
         // Backend now returns services bundled per company as `services`.
-        const withServices = comps.map((c) => toUiCompany(c, c.services || []));
+        const withServices = comps
+          .map((c) => toUiCompany(c, c.services || []))
+          .filter((company) => company.verified && company.services.length > 0);
 
         if (!cancelled) setCompanies(withServices);
       } catch (e) {
@@ -133,6 +139,30 @@ export default function FindServices() {
     } catch (error) {
       console.error("Không thể tải đánh giá công ty:", error);
       setReviewModal({ open: true, company, reviews: [], loading: false });
+    }
+  };
+
+  const handleReportCompany = async (company) => {
+    if (!isLoggedIn || currentRole !== "user" || !currentUser?.id) {
+      notify.warning("Vui lòng đăng nhập tài khoản người dùng để báo cáo công ty.");
+      return;
+    }
+    const reason = await notify.prompt({
+      title: "Báo cáo công ty",
+      description: `Cho chúng tôi biết vấn đề với công ty "${company.name}".`,
+      placeholder: "Nhập lý do báo cáo...",
+      confirmText: "Gửi báo cáo",
+      required: true,
+    });
+    if (!reason?.trim()) return;
+    try {
+      await reportCompany(company.id ?? company.company_id, {
+        reporter_user_id: currentUser.id,
+        reason: reason.trim(),
+      });
+      notify.success("Báo cáo đã được chuyển tới quản trị viên.", "Đã gửi báo cáo");
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : "Không thể gửi báo cáo công ty");
     }
   };
 
@@ -279,8 +309,25 @@ export default function FindServices() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Tìm dịch vụ cứu hộ</h1>
-        <p className="text-gray-500">Danh sách các đơn vị cứu hộ xe uy tín gần bạn</p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Tìm dịch vụ cứu hộ</h1>
+            <p className="text-gray-500">Danh sách các đơn vị cứu hộ xe uy tín gần bạn</p>
+          </div>
+          <Link
+            to="/dashboard"
+            state={{
+              assignmentMode: "automatic",
+              preselectedLat: location?.latitude,
+              preselectedLng: location?.longitude,
+              preselectedAddress: displayAddress,
+            }}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-pink-500 to-pink-400 px-5 py-3 text-sm font-semibold text-white transition-all hover:shadow-md hover:shadow-pink-200"
+          >
+            <Sparkles size={17} />
+            Tự động tìm dịch vụ
+          </Link>
+        </div>
       </div>
 
       {/* Search & Filter bar */}
@@ -445,6 +492,14 @@ export default function FindServices() {
                             className="mt-1 text-xs font-semibold text-pink-600 hover:text-pink-700"
                           >
                             Xem đánh giá cụ thể
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleReportCompany(company)}
+                            className="ml-3 inline-flex items-center gap-1 text-xs font-semibold text-red-500 hover:text-red-600"
+                          >
+                            <Flag size={12} />
+                            Báo cáo công ty
                           </button>
                         </div>
                         <div className="text-right">
