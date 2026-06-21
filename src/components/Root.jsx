@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Car,
@@ -13,14 +13,86 @@ import {
   Search,
   Users,
   LayoutDashboard,
+  AlertTriangle,
 } from "lucide-react";
 import { useApp } from "../context/useApp";
 import { EmergencySOS } from "../pages/Emergency";
+
+const EMERGENCY_DISMISS_STORAGE_KEY = "rescuesos.dismissed-emergency-notifications";
+const emergencyPriorities = new Set(["emergency", "critical", "urgent", "high"]);
+
+const loadDismissedEmergencyMap = () => {
+  try {
+    const raw = window.sessionStorage.getItem(EMERGENCY_DISMISS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+function EmergencyNotificationToast({ notification, onClose, onOpen }) {
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => onCloseRef.current(), 3000);
+    return () => window.clearTimeout(timer);
+  }, [notification.id]);
+
+  return (
+    <div
+      role="alert"
+      className="pointer-events-auto w-full max-w-sm overflow-hidden rounded-2xl border border-red-200 bg-white shadow-xl shadow-red-950/15"
+    >
+      <div className="flex items-start gap-3 p-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+          <AlertTriangle size={21} />
+        </div>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="min-w-0 flex-1 text-left"
+        >
+          <p className="text-[11px] font-bold uppercase tracking-wider text-red-600">
+            Ưu tiên khẩn cấp
+          </p>
+          <p className="mt-0.5 text-sm font-bold text-gray-900">
+            {notification.title}
+          </p>
+          <p className="mt-1 line-clamp-2 whitespace-pre-line text-xs leading-5 text-gray-600">
+            {notification.message}
+          </p>
+          {notification.requestId && (
+            <p className="mt-1.5 text-xs font-semibold text-red-600">
+              Xem yêu cầu #{notification.requestId}
+            </p>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          aria-label="Đóng thông báo khẩn cấp"
+        >
+          <X size={16} />
+        </button>
+      </div>
+      <div className="h-1 animate-[emergency-toast-progress_3s_linear_forwards] bg-red-500" />
+    </div>
+  );
+}
 
 export default function Root() {
   const { currentRole, notifications, markAllRead, markRead, unreadCount, isLoggedIn, logout, currentUser } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [dismissedEmergencyMap, setDismissedEmergencyMap] = useState(
+    loadDismissedEmergencyMap
+  );
   const location = useLocation();
   const navigate = useNavigate();
   const isAdminShell = location.pathname.startsWith("/admin");
@@ -56,8 +128,68 @@ export default function Root() {
   const isActive = (to) =>
     to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
 
+  const emergencyAccountKey = `${currentRole}:${currentUser?.id ?? "guest"}`;
+  const dismissedEmergencyIds = new Set(
+    dismissedEmergencyMap[emergencyAccountKey] ?? []
+  );
+
+  const dismissEmergencyIds = (ids) => {
+    if (ids.length === 0) return;
+    setDismissedEmergencyMap((prev) => {
+      const nextIds = new Set(prev[emergencyAccountKey] ?? []);
+      ids.forEach((id) => nextIds.add(String(id)));
+      const next = {
+        ...prev,
+        [emergencyAccountKey]: Array.from(nextIds).slice(-100),
+      };
+      try {
+        window.sessionStorage.setItem(
+          EMERGENCY_DISMISS_STORAGE_KEY,
+          JSON.stringify(next)
+        );
+      } catch {
+        // Session storage may be unavailable in private browsing modes.
+      }
+      return next;
+    });
+  };
+
+  const openNotification = (notification) => {
+    markRead(notification.id);
+    setNotifOpen(false);
+    dismissEmergencyIds([notification.id]);
+
+    if (!notification.requestId) return;
+
+    const requestState = { requestId: String(notification.requestId) };
+    if (currentRole === "company") {
+      navigate("/company", { state: requestState });
+    } else if (currentRole === "user") {
+      navigate("/dashboard", { state: requestState });
+    }
+  };
+
+  const activeEmergencyNotifications = notifications.filter(
+    (notification) =>
+      !notification.read &&
+      emergencyPriorities.has(notification.requestPriority) &&
+      !dismissedEmergencyIds.has(notification.id)
+  );
   return (
     <div className="min-h-screen bg-linear-to-br from-pink-50 via-white to-pink-50">
+      {activeEmergencyNotifications.length > 0 && (
+        <div className="pointer-events-none fixed right-4 top-20 z-[100] flex w-[calc(100%-2rem)] max-w-sm flex-col gap-3">
+          {activeEmergencyNotifications.slice(0, 3).map((notification) => (
+            <EmergencyNotificationToast
+              key={notification.id}
+              notification={notification}
+              onClose={() => dismissEmergencyIds([notification.id])}
+              onOpen={() => openNotification(notification)}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Navbar */}
       {!isAdminShell && <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-pink-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -125,13 +257,19 @@ export default function Root() {
                           <button
                             type="button"
                             key={n.id}
-                            onClick={() => markRead(n.id)}
-                            className={`w-full text-left px-4 py-3 border-b border-gray-50 transition-colors hover:bg-pink-50 ${!n.read ? "bg-pink-50/50" : ""}`}
+                            onClick={() => openNotification(n)}
+                            className={`w-full text-left px-4 py-3 border-b transition-colors ${
+                              emergencyPriorities.has(n.requestPriority)
+                                ? "border-red-100 bg-red-50/80 hover:bg-red-100/70"
+                                : `border-gray-50 hover:bg-pink-50 ${!n.read ? "bg-pink-50/50" : ""}`
+                            }`}
                           >
                             <div className="flex items-start gap-2">
                               <div
                                 className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                                  n.type === "success"
+                                  emergencyPriorities.has(n.requestPriority)
+                                    ? "bg-red-500 animate-pulse"
+                                    : n.type === "success"
                                     ? "bg-green-400"
                                     : n.type === "error"
                                     ? "bg-red-400"
@@ -140,9 +278,16 @@ export default function Root() {
                                     : "bg-pink-400"
                                 }`}
                               />
-                              <div>
+                              <div className="min-w-0">
                                 <p className="text-sm font-medium text-gray-800">{n.title}</p>
-                                <p className="text-xs text-gray-500 mt-0.5">{n.message}</p>
+                                <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line leading-relaxed">
+                                  {n.message}
+                                </p>
+                                {n.requestId && (
+                                  <p className="text-[11px] font-medium text-pink-600 mt-1">
+                                    Xem yêu cầu #{n.requestId}
+                                  </p>
+                                )}
                                 <p className="text-[10px] text-gray-400 mt-1">
                                   {new Date(n.createdAt).toLocaleString("vi-VN")}
                                 </p>

@@ -5,8 +5,10 @@ import { useApp } from "../context/useApp";
 import { changeUserPassword, getUser, updateUser } from "../api/users";
 import { uploadFileToCloudinary } from "../api/uploads";
 import { getCommunityPosts } from "../api/community";
+import { useToast } from "../components/ui/toastContext";
 
 export default function UserProfile() {
+  const notify = useToast();
   const { currentUser, currentRole, isLoggedIn, updateCurrentUser } = useApp();
   const navigate = useNavigate();
   const [form, setForm] = useState({
@@ -138,7 +140,7 @@ export default function UserProfile() {
         avatar: displayName.slice(0, 1).toUpperCase() || "U",
         avatarUrl: updated.avatar_url ?? "",
       });
-      window.alert("Đã lưu hồ sơ");
+      notify.success("Thông tin cá nhân của bạn đã được cập nhật.", "Đã lưu hồ sơ");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Lưu hồ sơ thất bại");
     } finally {

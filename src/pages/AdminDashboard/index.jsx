@@ -21,10 +21,17 @@ import RequestsTab from './components/RequestsTab';
 import ContentTab from './components/ContentTab';
 import { AdminDashboardContext } from "./AdminDashboardContext";
 import { deleteUser, getUsers, updateUser } from "../../api/users";
-import { deleteCompany, getCompanies, updateCompany } from "../../api/companies";
+import {
+  deleteCompany,
+  getCompanies,
+  getCompanyReports,
+  updateCompany,
+  updateCompanyReportStatus,
+} from "../../api/companies";
 import { getRequests } from "../../api/requests";
 import { toUiRequest } from "../../api/mappers";
 import { verifyAdminAccess } from "../../api/auth";
+import { useToast } from "../../components/ui/toastContext";
 import {
   BarChart,
   Bar,
@@ -53,6 +60,7 @@ const statusConfig = {
 };
 
 export default function AdminDashboard() {
+  const notify = useToast();
   const [hasAdminAccess, setHasAdminAccess] = useState(
     () => window.sessionStorage.getItem(ADMIN_ACCESS_KEY) === "granted"
   );
@@ -64,6 +72,7 @@ export default function AdminDashboard() {
 
   const [users, setUsers] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [companyReports, setCompanyReports] = useState([]);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -138,7 +147,14 @@ export default function AdminDashboard() {
     (async () => {
       setLoading(true);
       try {
-        const [u, c] = await Promise.all([getUsers(), getCompanies()]);
+        const [u, c, reports] = await Promise.all([
+          getUsers(),
+          getCompanies(),
+          getCompanyReports().catch((error) => {
+            console.warn("Không thể tải báo cáo công ty:", error);
+            return [];
+          }),
+        ]);
         if (cancelled) return;
 
         const uiUsers = u.map((x) => ({
@@ -171,6 +187,7 @@ export default function AdminDashboard() {
           locked: x.is_active === false,
         }));
         setCompanies(uiCompanies);
+        setCompanyReports(reports ?? []);
 
         const userById = new Map(uiUsers.map((x) => [x.id, x]));
         const companyNameById = new Map(uiCompanies.map((x) => [x.id, x.name]));
@@ -240,12 +257,16 @@ export default function AdminDashboard() {
       );
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Cập nhật tài khoản thất bại");
+      notify.error(e instanceof Error ? e.message : "Cập nhật tài khoản thất bại");
     }
   };
 
   const handleDeleteUser = async (user) => {
-    const ok = window.confirm(`Xóa tài khoản "${user.name}"?`);
+    const ok = await notify.confirm({
+      title: "Xóa tài khoản?",
+      description: `Tài khoản "${user.name}" sẽ bị xóa khỏi hệ thống.`,
+      confirmText: "Xóa tài khoản",
+    });
     if (!ok) return;
 
     try {
@@ -253,13 +274,13 @@ export default function AdminDashboard() {
       setUsers((prev) => prev.filter((u) => u.id !== user.id));
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Xóa tài khoản thất bại");
+      notify.error(e instanceof Error ? e.message : "Xóa tài khoản thất bại");
     }
   };
 
   const handleToggleCompanyVerified = async (company) => {
     if (!company.verified && company.verificationDocumentUrls.length === 0) {
-      window.alert("Công ty cần tải tài liệu kiểm duyệt trước khi xác minh");
+      notify.warning("Công ty cần tải tài liệu kiểm duyệt trước khi xác minh");
       return;
     }
     try {
@@ -271,12 +292,16 @@ export default function AdminDashboard() {
       );
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Cập nhật xác minh thất bại");
+      notify.error(e instanceof Error ? e.message : "Cập nhật xác minh thất bại");
     }
   };
 
   const handleLockCompany = async (company) => {
-    const ok = window.confirm(`Bạn có chắc muốn khóa công ty "${company.name}"?`);
+    const ok = await notify.confirm({
+      title: "Khóa công ty?",
+      description: `Công ty "${company.name}" sẽ không thể tiếp tục hoạt động trên hệ thống.`,
+      confirmText: "Khóa công ty",
+    });
     if (!ok) return;
     try {
       const updated = await updateCompany(company.id, { is_verified: false, is_active: false });
@@ -287,12 +312,17 @@ export default function AdminDashboard() {
       );
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Khóa công ty thất bại");
+      notify.error(e instanceof Error ? e.message : "Khóa công ty thất bại");
     }
   };
 
   const handleUnlockCompany = async (company) => {
-    const ok = window.confirm(`Mở khóa công ty "${company.name}"?`);
+    const ok = await notify.confirm({
+      title: "Mở khóa công ty?",
+      description: `Khôi phục quyền hoạt động cho công ty "${company.name}".`,
+      confirmText: "Mở khóa",
+      tone: "default",
+    });
     if (!ok) return;
     try {
       const updated = await updateCompany(company.id, { is_active: true });
@@ -305,12 +335,16 @@ export default function AdminDashboard() {
       );
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Mở khóa công ty thất bại");
+      notify.error(e instanceof Error ? e.message : "Mở khóa công ty thất bại");
     }
   };
 
   const handleDeleteCompany = async (company) => {
-    const ok = window.confirm(`Xóa công ty "${company.name}"? Các dữ liệu liên quan có thể bị ảnh hưởng.`);
+    const ok = await notify.confirm({
+      title: "Xóa công ty?",
+      description: `Công ty "${company.name}" sẽ bị xóa. Các dữ liệu liên quan có thể bị ảnh hưởng.`,
+      confirmText: "Xóa công ty",
+    });
     if (!ok) return;
     try {
       await deleteCompany(company.id);
@@ -318,7 +352,23 @@ export default function AdminDashboard() {
       setRequests((prev) => prev.map((r) => (r.companyId === company.id ? { ...r, companyName: "" } : r)));
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Xóa công ty thất bại");
+      notify.error(e instanceof Error ? e.message : "Xóa công ty thất bại");
+    }
+  };
+
+  const handleCompanyReportStatus = async (report, status) => {
+    try {
+      const updated = await updateCompanyReportStatus(report.report_id, status);
+      setCompanyReports((prev) =>
+        prev.map((item) =>
+          String(item.report_id) === String(report.report_id)
+            ? { ...item, ...updated }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error(error);
+      notify.error(error instanceof Error ? error.message : "Không thể cập nhật báo cáo");
     }
   };
 
@@ -329,7 +379,7 @@ export default function AdminDashboard() {
     requests.filter((r) => r.userId === String(userId)).length;
 
   const contextValue = {
-    activeTab, setActiveTab, users, setUsers, companies, setCompanies, requests, setRequests, loading, setLoading, searchText, setSearchText, computedStats, monthlyData, serviceDistribution, handleDeleteUser, handleToggleUserActive, handleToggleCompanyVerified, handleLockCompany, handleUnlockCompany, handleDeleteCompany, setSelectedUser, setSelectedCompany, setSelectedRequest, getCompanyRequestCount, getUserRequestCount, statusConfig, PIE_COLORS
+    activeTab, setActiveTab, users, setUsers, companies, setCompanies, companyReports, setCompanyReports, requests, setRequests, loading, setLoading, searchText, setSearchText, computedStats, monthlyData, serviceDistribution, handleDeleteUser, handleToggleUserActive, handleToggleCompanyVerified, handleLockCompany, handleUnlockCompany, handleDeleteCompany, handleCompanyReportStatus, setSelectedUser, setSelectedCompany, setSelectedRequest, getCompanyRequestCount, getUserRequestCount, statusConfig, PIE_COLORS
   };
 
   if (!hasAdminAccess) {

@@ -8,6 +8,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Community from "./pages/Community";
 import Login from "./pages/Login";
 import UserProfile from "./pages/UserProfile";
+import PaymentResult from "./pages/PaymentResult";
 
 export const router = createBrowserRouter([
   {
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
       { path: "admin", Component: AdminDashboard },
       { path: "community", Component: Community },
       { path: "login", Component: Login },
+      { path: "payment-result", Component: PaymentResult },
     ],
   },
 ]);

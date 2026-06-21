@@ -122,33 +122,6 @@ export const mockCommunityPosts = [
   },
 ];
 
-export const mockNotifications = [
-  {
-    id: "n1",
-    title: "Yêu cầu đã được tiếp nhận",
-    message: "Cứu Hộ Thành Công đã tiếp nhận yêu cầu của bạn. Dự kiến đến nơi sau 20 phút.",
-    type: "success",
-    read: false,
-    createdAt: "2026-03-25T14:10:00",
-  },
-  {
-    id: "n2",
-    title: "Kỹ thuật viên đang trên đường",
-    message: "Nhân viên Trần Văn B đang trên đường đến vị trí của bạn.",
-    type: "info",
-    read: false,
-    createdAt: "2026-03-25T14:15:00",
-  },
-  {
-    id: "n3",
-    title: "Dịch vụ hoàn tất",
-    message: "Yêu cầu #r1 đã hoàn tất. Hãy đánh giá chất lượng dịch vụ!",
-    type: "success",
-    read: true,
-    createdAt: "2026-03-20T09:15:00",
-  },
-];
-
 export const adminStats = {
   totalRequests: 1284,
   completedRequests: 1156,

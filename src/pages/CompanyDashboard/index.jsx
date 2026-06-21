@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Car,
   Bell,
@@ -37,6 +38,7 @@ import { getRequestImages } from "../../api/requestImages";
 import { createVehicle, deleteVehicle, getVehicles, updateVehicle } from "../../api/vehicles";
 import { toUiRequest } from "../../api/mappers";
 import { getRequestMessages, addRequestMessage, markMessageSeen } from "../../api/messages";
+import { confirmCashPayment } from "../../api/payments";
 import RequestsTab from './components/RequestsTab';
 import StatsTab from './components/StatsTab';
 import ServicesTab from './components/ServicesTab';
@@ -64,6 +66,8 @@ const isEmergencyRequest = (req) => ["emergency", "critical"].includes(req?.prio
 
 export default function CompanyDashboard() {
   const { currentUser, isLoggedIn, updateCurrentUser } = useApp();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const companyId = useMemo(() => {
     if (!currentUser || currentUser.role !== "company") return null;
@@ -121,6 +125,7 @@ export default function CompanyDashboard() {
   const messageTimerRef = useRef(null);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState({});
+  const [paymentConfirming, setPaymentConfirming] = useState({});
   const toast = useToast();
   const [vehicles, setVehicles] = useState([]);
   const [ratingSummary, setRatingSummary] = useState({ average: null, count: 0 });
@@ -232,6 +237,25 @@ export default function CompanyDashboard() {
   };
 
   const companyRequests = requests;
+  const targetRequestId = location.state?.requestId;
+
+  useEffect(() => {
+    if (!targetRequestId || requests.length === 0) return;
+    const target = requests.find((request) => String(request.id) === String(targetRequestId));
+    if (!target) return;
+    setSelectedReq(target);
+    setActiveTab("requests");
+    navigate(`${location.pathname}${location.search}`, {
+      replace: true,
+      state: null,
+    });
+  }, [
+    location.pathname,
+    location.search,
+    navigate,
+    requests,
+    targetRequestId,
+  ]);
 
   const filtered = companyRequests.filter(
     (r) => filterStatus === "all" || r.status === filterStatus
@@ -458,9 +482,40 @@ export default function CompanyDashboard() {
     } catch (e) {
       console.error(e);
       try { toast.push({ title: 'Lỗi', description: e?.message ?? 'Cập nhật trạng thái thất bại', type: 'error' }); } catch (err) { console.warn(err); }
-      window.alert(e instanceof Error ? e.message : "Cập nhật trạng thái thất bại");
     } finally {
       setStatusUpdating((s) => ({ ...s, [req.id]: false }));
+    }
+  };
+
+  const handleConfirmCashPayment = async (request) => {
+    if (!companyId) return;
+    const amount = Number(request.finalPrice ?? request.servicePrice);
+    const label = Number.isFinite(amount) ? `${amount.toLocaleString("vi-VN")}đ` : "khoản thanh toán";
+    const ok = await toast.confirm({
+      title: "Xác nhận thanh toán tiền mặt?",
+      description: `Xác nhận đã nhận ${label} cho yêu cầu #${request.id}.`,
+      confirmText: "Đã nhận tiền",
+      tone: "default",
+    });
+    if (!ok) return;
+
+    setPaymentConfirming((prev) => ({ ...prev, [request.id]: true }));
+    try {
+      await confirmCashPayment(request.id, companyId);
+      await refreshRequests({ silent: true });
+      toast.push({
+        title: "Đã xác nhận thanh toán",
+        description: `Yêu cầu #${request.id} đã được ghi nhận thanh toán tiền mặt.`,
+        type: "success",
+      });
+    } catch (error) {
+      toast.push({
+        title: "Không thể xác nhận thanh toán",
+        description: error instanceof Error ? error.message : "Vui lòng thử lại.",
+        type: "error",
+      });
+    } finally {
+      setPaymentConfirming((prev) => ({ ...prev, [request.id]: false }));
     }
   };
 
@@ -502,11 +557,11 @@ export default function CompanyDashboard() {
     const serviceId = Number.parseInt(newServiceId, 10);
     const price = Number.parseFloat(newServicePrice);
     if (!Number.isFinite(serviceId)) {
-      window.alert("Vui lòng chọn dịch vụ");
+      toast.warning("Vui lòng chọn dịch vụ");
       return;
     }
     if (!Number.isFinite(price) || price < 0) {
-      window.alert("Giá dịch vụ phải là số không âm");
+      toast.warning("Giá dịch vụ phải là số không âm");
       return;
     }
 
@@ -527,7 +582,7 @@ export default function CompanyDashboard() {
       setAddingServiceOpen(false);
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Thêm dịch vụ thất bại");
+      toast.error(e instanceof Error ? e.message : "Thêm dịch vụ thất bại");
     } finally {
       setAddingService(false);
     }
@@ -552,7 +607,7 @@ export default function CompanyDashboard() {
     if (editingServiceId == null) return;
     const price = Number.parseFloat(editingServicePrice);
     if (!Number.isFinite(price) || price < 0) {
-      window.alert("Giá dịch vụ phải là số không âm");
+      toast.warning("Giá dịch vụ phải là số không âm");
       return;
     }
 
@@ -567,7 +622,7 @@ export default function CompanyDashboard() {
       cancelEditService();
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Cập nhật giá thất bại");
+      toast.error(e instanceof Error ? e.message : "Cập nhật giá thất bại");
     } finally {
       setSavingService(false);
     }
@@ -575,7 +630,11 @@ export default function CompanyDashboard() {
 
   const handleDeleteService = async (service) => {
     if (!companyId) return;
-    const ok = window.confirm(`Xóa dịch vụ "${service.service_name}" khỏi công ty?`);
+    const ok = await toast.confirm({
+      title: "Xóa dịch vụ?",
+      description: `Dịch vụ "${service.service_name}" sẽ bị gỡ khỏi danh sách của công ty.`,
+      confirmText: "Xóa dịch vụ",
+    });
     if (!ok) return;
 
     try {
@@ -584,7 +643,7 @@ export default function CompanyDashboard() {
       if (String(editingServiceId) === String(service.service_id)) cancelEditService();
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Xóa dịch vụ thất bại");
+      toast.error(e instanceof Error ? e.message : "Xóa dịch vụ thất bại");
     }
   };
 
@@ -615,11 +674,11 @@ export default function CompanyDashboard() {
     const vehicle_license = vehicleDraft.vehicle_license.trim();
     const vehicle_type = vehicleDraft.vehicle_type.trim();
     if (!vehicle_license) {
-      window.alert("Vui lòng nhập biển số xe");
+      toast.warning("Vui lòng nhập biển số xe");
       return;
     }
     if (!vehicle_type) {
-      window.alert("Vui lòng nhập loại phương tiện");
+      toast.warning("Vui lòng nhập loại phương tiện");
       return;
     }
 
@@ -647,14 +706,18 @@ export default function CompanyDashboard() {
       setVehicleFormOpen(false);
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Lưu phương tiện thất bại");
+      toast.error(e instanceof Error ? e.message : "Lưu phương tiện thất bại");
     } finally {
       setSavingVehicle(false);
     }
   };
 
   const handleDeleteVehicle = async (vehicle) => {
-    const ok = window.confirm(`Xóa phương tiện "${vehicle.vehicle_license}"?`);
+    const ok = await toast.confirm({
+      title: "Xóa phương tiện?",
+      description: `Phương tiện "${vehicle.vehicle_license}" sẽ bị xóa khỏi đội xe.`,
+      confirmText: "Xóa phương tiện",
+    });
     if (!ok) return;
 
     try {
@@ -663,7 +726,7 @@ export default function CompanyDashboard() {
       if (String(editingVehicleId) === String(vehicle.vehicle_id)) resetVehicleDraft();
     } catch (e) {
       console.error(e);
-      window.alert(e instanceof Error ? e.message : "Xóa phương tiện thất bại");
+      toast.error(e instanceof Error ? e.message : "Xóa phương tiện thất bại");
     }
   };
 
@@ -719,7 +782,7 @@ export default function CompanyDashboard() {
   ];
 
   const contextValue = {
-    currentUser, isLoggedIn, updateCurrentUser, companyId, activeTab, setActiveTab, selectedReq, setSelectedReq, filterStatus, setFilterStatus, companyName, setCompanyName, companyProfile, setCompanyProfile, profileDraft, setProfileDraft, editingProfile, setEditingProfile, savingProfile, setSavingProfile, companyServices, setCompanyServices, allServices, setAllServices, addingServiceOpen, setAddingServiceOpen, addingService, setAddingService, newServiceId, setNewServiceId, newServicePrice, setNewServicePrice, editingServiceId, setEditingServiceId, editingServicePrice, setEditingServicePrice, savingService, setSavingService, requests, setRequests, chartData, loadingRequests, setLoadingRequests, messageOpen, setMessageOpen, messages, setMessages, messageInput, setMessageInput, messageTimerRef, sendingMessage, setSendingMessage, statusUpdating, setStatusUpdating, toast, vehicles, setVehicles, ratingSummary, setRatingSummary, companyReviews, setCompanyReviews, satisfactionRate, setSatisfactionRate, selectedVehicleId, setSelectedVehicleId, etaMinutes, setEtaMinutes, finalPrice, setFinalPrice, vehicleFormOpen, setVehicleFormOpen, editingVehicleId, setEditingVehicleId, savingVehicle, setSavingVehicle, vehicleDraft, setVehicleDraft, parseGeoJsonPoint, companyStats, formatRevenue, companyRequests, filtered, refreshRequests, handleStatusUpdate, availableVehicles, formatVnd, availableServices, handleAddService, startEditService, cancelEditService, handleSaveServicePrice, handleDeleteService, resetVehicleDraft, startEditVehicle, handleSaveVehicle, handleDeleteVehicle, openMessageModal, closeMessageModal, statusConfig
+    currentUser, isLoggedIn, updateCurrentUser, companyId, activeTab, setActiveTab, selectedReq, setSelectedReq, filterStatus, setFilterStatus, companyName, setCompanyName, companyProfile, setCompanyProfile, profileDraft, setProfileDraft, editingProfile, setEditingProfile, savingProfile, setSavingProfile, companyServices, setCompanyServices, allServices, setAllServices, addingServiceOpen, setAddingServiceOpen, addingService, setAddingService, newServiceId, setNewServiceId, newServicePrice, setNewServicePrice, editingServiceId, setEditingServiceId, editingServicePrice, setEditingServicePrice, savingService, setSavingService, requests, setRequests, chartData, loadingRequests, setLoadingRequests, messageOpen, setMessageOpen, messages, setMessages, messageInput, setMessageInput, messageTimerRef, sendingMessage, setSendingMessage, statusUpdating, setStatusUpdating, paymentConfirming, toast, vehicles, setVehicles, ratingSummary, setRatingSummary, companyReviews, setCompanyReviews, satisfactionRate, setSatisfactionRate, selectedVehicleId, setSelectedVehicleId, etaMinutes, setEtaMinutes, finalPrice, setFinalPrice, vehicleFormOpen, setVehicleFormOpen, editingVehicleId, setEditingVehicleId, savingVehicle, setSavingVehicle, vehicleDraft, setVehicleDraft, parseGeoJsonPoint, companyStats, formatRevenue, companyRequests, filtered, refreshRequests, handleStatusUpdate, handleConfirmCashPayment, availableVehicles, formatVnd, availableServices, handleAddService, startEditService, cancelEditService, handleSaveServicePrice, handleDeleteService, resetVehicleDraft, startEditVehicle, handleSaveVehicle, handleDeleteVehicle, openMessageModal, closeMessageModal, statusConfig
   };
 
   return (

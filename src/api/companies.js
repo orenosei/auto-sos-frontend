@@ -94,3 +94,27 @@ export async function deleteCompany(companyId) {
   });
   return res.data;
 }
+
+export async function reportCompany(companyId, payload) {
+  const res = await apiRequest(`/api/companies/${companyId}/reports`, {
+    method: "POST",
+    body: payload,
+  });
+  return res.data;
+}
+
+export async function getCompanyReports(status) {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  const query = params.toString();
+  const res = await apiRequest(`/api/companies/reports${query ? `?${query}` : ""}`);
+  return res.data;
+}
+
+export async function updateCompanyReportStatus(reportId, status) {
+  const res = await apiRequest(`/api/companies/reports/${reportId}/status`, {
+    method: "PUT",
+    body: { status },
+  });
+  return res.data;
+}

@@ -1,4 +1,32 @@
+import { normalizeUtcTimestamp } from "../utils/dateTime";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+const SQL_TIMESTAMP_PATTERN =
+  /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
+const DATE_FIELD_PATTERN =
+  /(?:^|_)(?:created|updated|registered|reviewed|sent|changed|liked|accepted|heading|arrived|completed|cancelled|confirmed|paid)_at$|^(?:estimated_arrival|actual_arrival)$|^(?:createdAt|updatedAt|registeredAt|reviewedAt|sentAt|changedAt|likedAt|acceptedAt|headingAt|arrivedAt|actualArrival|completedAt|cancelledAt|estimatedArrival|confirmedAt|paidAt)$/;
+
+function normalizeApiDates(value, key = "") {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeApiDates(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([childKey, childValue]) => [
+        childKey,
+        normalizeApiDates(childValue, childKey),
+      ])
+    );
+  }
+  if (
+    typeof value === "string" &&
+    DATE_FIELD_PATTERN.test(key) &&
+    SQL_TIMESTAMP_PATTERN.test(value)
+  ) {
+    return normalizeUtcTimestamp(value);
+  }
+  return value;
+}
 
 function joinUrl(base, path) {
   if (!base) return path;
@@ -35,7 +63,7 @@ export async function apiRequest(path, options) {
   });
 
   const text = await res.text();
-  const parsed = text ? JSON.parse(text) : null;
+  const parsed = text ? normalizeApiDates(JSON.parse(text)) : null;
 
   if (!res.ok) {
     const message =

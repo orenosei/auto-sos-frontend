@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useUserDashboard } from '../UserDashboardContext';
-import { MapPin, CheckCircle2, XCircle, Star, Phone, MessageCircle, Car, Wrench, Navigation, Pencil, Trash2, Clock } from "lucide-react";
+import { MapPin, CheckCircle2, XCircle, Star, Phone, MessageCircle, Car, Wrench, Navigation, Pencil, Trash2, Clock, Banknote, CreditCard, Loader2 } from "lucide-react";
 
 export default function TrackTab() {
   const context = useUserDashboard();
   const { 
-    requests, selectedRequest, setSelectedRequest, openMessageModal, cancelRequest, statusConfig, openRatingModal, handleDeleteReview
+    requests, selectedRequest, setSelectedRequest, openMessageModal, cancelRequest, statusConfig, openRatingModal, handleDeleteReview, handleCashPayment, handleVnPayPayment, paymentLoading, toast
   } = context;
   const userRequests = requests;
   const [statusFilter, setStatusFilter] = useState("all");
@@ -201,6 +201,80 @@ export default function TrackTab() {
                   )}
                 </div>
 
+                {selectedRequest.status === "completed" && (
+                  <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold text-gray-800">Thanh toán dịch vụ</p>
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          Tổng tiền: {selectedRequest.price || "Chưa xác định"}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          selectedRequest.paymentStatus === "paid"
+                            ? "bg-green-100 text-green-700"
+                            : selectedRequest.paymentStatus === "pending"
+                              ? "bg-yellow-100 text-yellow-700"
+                              : selectedRequest.paymentStatus === "failed"
+                                ? "bg-red-100 text-red-700"
+                                : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {selectedRequest.paymentStatus === "paid"
+                          ? "Đã thanh toán"
+                          : selectedRequest.paymentStatus === "pending"
+                            ? "Chờ xác nhận"
+                            : selectedRequest.paymentStatus === "failed"
+                              ? "Thanh toán thất bại"
+                              : "Chưa thanh toán"}
+                      </span>
+                    </div>
+
+                    {selectedRequest.paymentStatus === "paid" ? (
+                      <p className="mt-3 text-sm text-green-700">
+                        Đã thanh toán bằng{" "}
+                        {selectedRequest.paymentMethod === "vnpay" ? "VNPay" : "tiền mặt"}
+                        {selectedRequest.paidAt
+                          ? ` lúc ${new Date(selectedRequest.paidAt).toLocaleString("vi-VN")}`
+                          : ""}.
+                      </p>
+                    ) : selectedRequest.paymentMethod === "cash" &&
+                      selectedRequest.paymentStatus === "pending" ? (
+                      <p className="mt-3 text-sm text-yellow-700">
+                        Vui lòng thanh toán trực tiếp cho công ty. Trạng thái sẽ cập nhật khi công ty xác nhận đã nhận tiền.
+                      </p>
+                    ) : (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <button
+                          onClick={() => handleCashPayment(selectedRequest)}
+                          disabled={!!paymentLoading[selectedRequest.id]}
+                          className="flex items-center justify-center gap-2 rounded-xl border border-green-200 bg-white py-2.5 text-sm font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50"
+                        >
+                          {paymentLoading[selectedRequest.id] === "cash" ? (
+                            <Loader2 size={16} className="animate-spin" />
+                          ) : (
+                            <Banknote size={16} />
+                          )}
+                          Tiền mặt
+                        </button>
+                        <button
+                          onClick={() => handleVnPayPayment(selectedRequest)}
+                          disabled={!!paymentLoading[selectedRequest.id]}
+                          className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          {paymentLoading[selectedRequest.id] === "vnpay" ? (
+                            <Loader2 size={16} className="animate-spin" />
+                          ) : (
+                            <CreditCard size={16} />
+                          )}
+                          Thanh toán VNPay
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {selectedRequest.imageUrls?.length > 0 && (
                   <div className="mt-4 border-t border-gray-100 pt-4">
                     <p className="mb-2 text-sm font-semibold text-gray-800">Ảnh đã tải lên</p>
@@ -272,7 +346,7 @@ export default function TrackTab() {
                       onClick={(event) => {
                         if (!selectedRequest.companyPhone) {
                           event.preventDefault();
-                          window.alert("Đơn vị cứu hộ chưa cập nhật số điện thoại.");
+                          toast.warning("Đơn vị cứu hộ chưa cập nhật số điện thoại.");
                         }
                       }}
                       className="flex-1 flex items-center justify-center gap-2 bg-pink-50 text-pink-600 py-2.5 rounded-xl text-sm font-medium hover:bg-pink-100 transition-colors"

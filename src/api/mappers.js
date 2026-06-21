@@ -1,3 +1,5 @@
+import { normalizeUtcTimestamp } from "../utils/dateTime";
+
 export function toUiUser(role, data) {
   if (role === "company") {
     const c = data;
@@ -147,9 +149,13 @@ function parseGeoJsonFromString(geoJsonString) {
 
 export function toUiRequest(r, lookup) {
   const point = parseGeoJsonPoint(r.absolute_location);
-  const priceNumber = Number(lookup?.servicePrice ?? r.final_price);
-  const estimatedArrival = r.estimated_arrival ? new Date(r.estimated_arrival) : null;
-  const acceptedAt = r.accepted_at ? new Date(r.accepted_at) : null;
+  const priceNumber = Number(r.final_price ?? lookup?.servicePrice);
+  const estimatedArrival = r.estimated_arrival
+    ? new Date(normalizeUtcTimestamp(r.estimated_arrival))
+    : null;
+  const acceptedAt = r.accepted_at
+    ? new Date(normalizeUtcTimestamp(r.accepted_at))
+    : null;
   const etaMinutes =
     estimatedArrival && Number.isFinite(estimatedArrival.getTime())
       ? Math.max(0, Math.round((estimatedArrival.getTime() - Date.now()) / 60000))
@@ -204,6 +210,9 @@ export function toUiRequest(r, lookup) {
     cancelledBy: r.cancelled_by,
     cancelReason: r.cancel_reason,
     finalPrice: r.final_price,
+    paymentMethod: r.payment_method ?? "",
+    paymentStatus: r.payment_status ?? "unpaid",
+    paidAt: r.paid_at,
     createdAt: r.created_at,
     updatedAt:
       r.completed_at ??

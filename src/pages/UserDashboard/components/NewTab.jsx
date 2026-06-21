@@ -1,12 +1,12 @@
 import React from 'react';
 import { useUserDashboard } from '../UserDashboardContext';
-import { CheckCircle2, Loader2, Star, MapPin, X, Camera, Send, Clock, Sparkles, ListChecks } from "lucide-react";
+import { CheckCircle2, Loader2, Star, MapPin, X, Camera, Send, Clock, Sparkles, ListChecks, Flag } from "lucide-react";
 import LocationPickerMap from "../../../components/LocationPickerMap";
 
 export default function NewTab() {
   const context = useUserDashboard();
   const { 
-    setActiveTab, companies, newReq, setNewReq, submittingRequest, imageUploading, imageInputRef, availableRequestServices, selectedCompany, selectedCompanyService, companiesWithDistance, handleImageSelection, removeUploadedImage, submitRequest, serviceIconMap, openCompanyReviews
+    setActiveTab, companies, newReq, setNewReq, submittingRequest, imageUploading, imageInputRef, availableRequestServices, selectedCompany, selectedCompanyService, companiesWithDistance, handleImageSelection, removeUploadedImage, submitRequest, serviceIconMap, openCompanyReviews, handleReportCompany
   } = context;
 
   const openImagePicker = () => {
@@ -144,6 +144,17 @@ export default function NewTab() {
                       className="mt-3 text-xs font-semibold text-pink-600 hover:text-pink-700"
                     >
                       Xem đánh giá cụ thể
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReportCompany(c);
+                      }}
+                      className="ml-3 inline-flex items-center gap-1 text-xs font-semibold text-red-500 hover:text-red-600"
+                    >
+                      <Flag size={11} />
+                      Báo cáo
                     </button>
                   </div>
                 ))}
@@ -383,7 +394,6 @@ export default function NewTab() {
                       });
                     } catch (e) {
                       console.error(e);
-                      window.alert(e instanceof Error ? e.message : "Gửi yêu cầu thất bại");
                     }
                   }}
                   className="flex-1 bg-linear-to-r from-pink-500 to-pink-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md hover:shadow-pink-200 transition-all flex items-center justify-center gap-2"

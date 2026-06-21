@@ -15,17 +15,20 @@ import {
   AlertCircle,
   X,
   Sparkles,
+  Flag,
 } from "lucide-react";
-import { getCompanies, getCompanyReviews, getNearbyCompanies } from "../api/companies";
+import { getCompanies, getCompanyReviews, getNearbyCompanies, reportCompany } from "../api/companies";
 import { getServices } from "../api/services";
 import { toUiCompany, toUiService } from "../api/mappers";
 import { useGPS } from "../hooks/useGPS";
 import { calculateDistance, calculateETA, formatAddress } from "../utils/gpsUtils";
 import ServiceMap from "../components/ServiceMap";
 import { useApp } from "../context/useApp";
+import { useToast } from "../components/ui/toastContext";
 
 export default function FindServices() {
-  const { currentRole } = useApp();
+  const notify = useToast();
+  const { currentRole, currentUser, isLoggedIn } = useApp();
   const [searchText, setSearchText] = useState("");
   const [selectedService, setSelectedService] = useState("Tất cả");
   const [sortBy, setSortBy] = useState("distance");
@@ -136,6 +139,30 @@ export default function FindServices() {
     } catch (error) {
       console.error("Không thể tải đánh giá công ty:", error);
       setReviewModal({ open: true, company, reviews: [], loading: false });
+    }
+  };
+
+  const handleReportCompany = async (company) => {
+    if (!isLoggedIn || currentRole !== "user" || !currentUser?.id) {
+      notify.warning("Vui lòng đăng nhập tài khoản người dùng để báo cáo công ty.");
+      return;
+    }
+    const reason = await notify.prompt({
+      title: "Báo cáo công ty",
+      description: `Cho chúng tôi biết vấn đề với công ty "${company.name}".`,
+      placeholder: "Nhập lý do báo cáo...",
+      confirmText: "Gửi báo cáo",
+      required: true,
+    });
+    if (!reason?.trim()) return;
+    try {
+      await reportCompany(company.id ?? company.company_id, {
+        reporter_user_id: currentUser.id,
+        reason: reason.trim(),
+      });
+      notify.success("Báo cáo đã được chuyển tới quản trị viên.", "Đã gửi báo cáo");
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : "Không thể gửi báo cáo công ty");
     }
   };
 
@@ -465,6 +492,14 @@ export default function FindServices() {
                             className="mt-1 text-xs font-semibold text-pink-600 hover:text-pink-700"
                           >
                             Xem đánh giá cụ thể
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleReportCompany(company)}
+                            className="ml-3 inline-flex items-center gap-1 text-xs font-semibold text-red-500 hover:text-red-600"
+                          >
+                            <Flag size={12} />
+                            Báo cáo công ty
                           </button>
                         </div>
                         <div className="text-right">

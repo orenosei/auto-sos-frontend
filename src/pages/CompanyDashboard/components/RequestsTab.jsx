@@ -1,6 +1,6 @@
 import React from 'react';
 import { useCompanyDashboard } from '../CompanyDashboardContext';
-import { Bell, CheckCircle2, Loader2, MapPin, MessageCircle, Phone, ChevronRight, XCircle, AlertTriangle, Star } from "lucide-react";
+import { Bell, CheckCircle2, Loader2, MapPin, MessageCircle, Phone, ChevronRight, XCircle, AlertTriangle, Star, Banknote, CreditCard } from "lucide-react";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -52,7 +52,7 @@ function RequestLocationMap({ request }) {
 export default function RequestsTab() {
   const context = useCompanyDashboard();
   const { 
-    selectedReq, setSelectedReq, filterStatus, setFilterStatus, loadingRequests, selectedVehicleId, setSelectedVehicleId, etaMinutes, setEtaMinutes, finalPrice, setFinalPrice, statusUpdating, vehicles, availableVehicles, filtered, handleStatusUpdate, openMessageModal, statusConfig, companyReviews
+    selectedReq, setSelectedReq, filterStatus, setFilterStatus, loadingRequests, selectedVehicleId, setSelectedVehicleId, etaMinutes, setEtaMinutes, finalPrice, setFinalPrice, statusUpdating, paymentConfirming, vehicles, availableVehicles, filtered, handleStatusUpdate, handleConfirmCashPayment, openMessageModal, statusConfig, companyReviews
   } = context;
   const isEmergencyRequest = (req) => ["emergency", "critical"].includes(req?.priority);
   const contactName = (req) => req.contactName || req.userName || "Chưa điền thông tin";
@@ -292,6 +292,55 @@ export default function RequestsTab() {
                       <p className="mt-1 text-[11px] text-gray-400">
                         {new Date(selectedReview.reviewed_at).toLocaleString("vi-VN")}
                       </p>
+                    </div>
+                  )}
+                  {selectedReq.status === "completed" && (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-blue-700">
+                          Trạng thái thanh toán
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            selectedReq.paymentStatus === "paid"
+                              ? "bg-green-100 text-green-700"
+                              : selectedReq.paymentStatus === "pending"
+                                ? "bg-yellow-100 text-yellow-700"
+                                : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {selectedReq.paymentStatus === "paid"
+                            ? "Đã thanh toán"
+                            : selectedReq.paymentStatus === "pending"
+                              ? "Chờ thanh toán/xác nhận"
+                              : "Chưa thanh toán"}
+                        </span>
+                      </div>
+                      {selectedReq.paymentMethod && (
+                        <p className="mt-2 flex items-center gap-1.5 text-sm text-gray-700">
+                          {selectedReq.paymentMethod === "vnpay" ? (
+                            <CreditCard size={14} className="text-blue-600" />
+                          ) : (
+                            <Banknote size={14} className="text-green-600" />
+                          )}
+                          {selectedReq.paymentMethod === "vnpay" ? "VNPay" : "Tiền mặt"}
+                        </p>
+                      )}
+                      {selectedReq.paymentMethod === "cash" &&
+                        selectedReq.paymentStatus === "pending" && (
+                          <button
+                            onClick={() => handleConfirmCashPayment(selectedReq)}
+                            disabled={!!paymentConfirming[selectedReq.id]}
+                            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                          >
+                            {paymentConfirming[selectedReq.id] ? (
+                              <Loader2 size={15} className="animate-spin" />
+                            ) : (
+                              <CheckCircle2 size={15} />
+                            )}
+                            Xác nhận đã nhận tiền mặt
+                          </button>
+                        )}
                     </div>
                   )}
                 </div>

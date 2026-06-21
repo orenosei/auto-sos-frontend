@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { AppContext } from "./internalAppContext";
-import { mockNotifications } from "../data/mockData";
 import { loginAccount, registerCompany, registerUser } from "../api/auth";
 import { toUiUser } from "../api/mappers";
 import { getNotifications, markNotificationRead } from "../api/notifications";
@@ -46,7 +45,7 @@ export function AppProvider({ children }) {
       return false;
     }
   });
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [notifications, setNotifications] = useState([]);
   const [emergencyOpen, setEmergencyOpen] = useState(false);
 
   // initial state is read via lazy initializers above
@@ -57,7 +56,10 @@ export function AppProvider({ children }) {
     let timer = null;
 
     const load = async () => {
-      if (!isLoggedIn || !currentUser) return;
+      if (!isLoggedIn || !currentUser) {
+        if (mounted) setNotifications([]);
+        return;
+      }
       try {
         const recipientType = currentRole === 'company' ? 'company' : 'user';
         const data = await getNotifications(recipientType, currentUser.id);
@@ -71,6 +73,7 @@ export function AppProvider({ children }) {
             read: !!n.is_read,
             createdAt: n.created_at,
             requestId: n.request_id,
+            requestPriority: n.request_priority ?? "normal",
             type: n.notification_type,
           }));
           return mapped;
@@ -80,7 +83,7 @@ export function AppProvider({ children }) {
       }
     };
 
-    if (isLoggedIn) {
+    if (isLoggedIn && currentUser) {
       load();
       timer = setInterval(load, 5000);
     }
@@ -166,6 +169,7 @@ export function AppProvider({ children }) {
   const logout = () => {
     setIsLoggedIn(false);
     setCurrentUser(null);
+    setNotifications([]);
     try {
       localStorage.removeItem(storageKey);
     } catch {
