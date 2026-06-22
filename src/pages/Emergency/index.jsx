@@ -501,17 +501,12 @@ export function EmergencySOS() {
       {/* ── Floating SOS Button ── */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
         {/* Tooltip label */}
-        {!isOpen && (
-          <div className="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none select-none shadow-lg whitespace-nowrap hidden sm:block" style={{ opacity: 0.85 }}>
-            🚨 Gọi cứu hộ khẩn cấp
-          </div>
-        )}
+      
 
         {!isOpen && (
           <button
             onClick={openSOS}
             className="group relative w-20 h-20 rounded-full flex items-center justify-center shadow-2xl focus:outline-none focus-visible:ring-4 focus-visible:ring-red-400"
-            aria-label="Gọi cứu hộ khẩn cấp SOS"
           >
             {/* Pulsing rings */}
             <span className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-25" />

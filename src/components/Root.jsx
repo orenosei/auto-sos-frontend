@@ -412,7 +412,7 @@ export default function Root() {
       </main>
 
       {/* Emergency SOS floating button */}
-      {currentRole === "user" && !isAdminShell && <EmergencySOS />}
+      {!isAdminShell && (!isLoggedIn || currentRole === "user") && <EmergencySOS />}
 
       {/* Footer */}
       {!isAdminShell && <footer className="bg-white border-t border-pink-100 mt-16">
